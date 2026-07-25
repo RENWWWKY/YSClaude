@@ -3148,6 +3148,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   toolInlineItem: {
     alignSelf: 'stretch',
+    flexShrink: 1,
+    minWidth: 0,
     maxWidth: '100%',
   },
   // 单行工具调用：箭头紧跟文字，长文字在可用宽度内收缩。
@@ -3209,6 +3211,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   // 思维链记录沿用工具调用行与展开内容样式。
   thinkingWrap: {
+    flexShrink: 1,
+    minWidth: 0,
+    maxWidth: '100%',
     marginBottom: 10,
   },
   summaryOverlay: {
