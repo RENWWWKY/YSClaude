@@ -88,6 +88,7 @@ export function ToolConfigTab({ showToast, keyboardBottomInset }: SettingsTabPro
     nativeToolConfig,
     locationShareConfig,
     mcpToolConfig,
+    toolResultCompressionConfig,
     setMemoryVaultConfig,
     setWebSearchConfig,
     setWebInteractionConfig,
@@ -104,6 +105,7 @@ export function ToolConfigTab({ showToast, keyboardBottomInset }: SettingsTabPro
     setNativeToolConfig,
     setLocationShareConfig,
     setMcpToolConfig,
+    setToolResultCompressionConfig,
   } = useSettingsStore();
   const activeApiConfig = apiConfigs[activeConfigIndex] || null;
   const [localQqEnabled, setLocalQqEnabled] = useState(!!qqBotToolConfig?.enabled);
@@ -424,7 +426,7 @@ export function ToolConfigTab({ showToast, keyboardBottomInset }: SettingsTabPro
   const [mcpServerAuth, setMcpServerAuth] = useState('');
   const [mcpSyncingServerId, setMcpSyncingServerId] = useState<string | null>(null);
   const [mcpResourceToolsEnabled, setMcpResourceToolsEnabled] = useState(!!mcpToolConfig?.resourceToolsEnabled);
-  const [toolSettingsPage, setToolSettingsPage] = useState<'builtIn' | 'mcp' | 'features'>('builtIn');
+  const [toolSettingsPage, setToolSettingsPage] = useState<'builtIn' | 'mcp' | 'features' | 'context'>('builtIn');
   const [locationEnabled, setLocationEnabled] = useState(!!locationShareConfig?.enabled);
   const [locationTencentKey, setLocationTencentKey] = useState(locationShareConfig?.tencentKey || '');
   const [selectedBuiltInToolKey, setSelectedBuiltInToolKey] = useState<string | null>(null);
@@ -2802,6 +2804,7 @@ export function ToolConfigTab({ showToast, keyboardBottomInset }: SettingsTabPro
           ['builtIn', '内置工具'],
           ['mcp', 'MCP 服务'],
           ['features', '辅助功能'],
+          ['context', '上下文'],
         ] as const).map(([key, label]) => {
           const selected = toolSettingsPage === key;
           return (
@@ -2849,6 +2852,48 @@ export function ToolConfigTab({ showToast, keyboardBottomInset }: SettingsTabPro
           tools={otherFeatureCards}
           onSelectTool={setSelectedBuiltInToolKey}
         />}
+        {toolSettingsPage === 'context' && (
+          <View style={{ paddingHorizontal: 20, paddingTop: 18, gap: 14 }}>
+            <View style={styles.switchRow}>
+              <View style={styles.switchText}>
+                <Text style={styles.label}>自动压缩工具结果</Text>
+                <Text style={styles.hint}>当前回复保留完整结果；下一轮 Agent transcript 使用压缩结果。</Text>
+              </View>
+              <Switch
+                value={toolResultCompressionConfig.enabled}
+                onValueChange={(enabled) => setToolResultCompressionConfig({ enabled })}
+                trackColor={{ false: colors.inputBorder, true: colors.primary }}
+              />
+            </View>
+            <View style={styles.field}><Text style={styles.label}>压缩 API 地址（OpenAI 兼容）</Text><TextInput style={styles.input} value={toolResultCompressionConfig.baseUrl} onChangeText={(baseUrl) => setToolResultCompressionConfig({ baseUrl })} placeholder="https://api.openai.com/v1" placeholderTextColor={colors.textTertiary} autoCapitalize="none" /></View>
+            <View style={styles.field}><Text style={styles.label}>API Key</Text><TextInput style={styles.input} value={toolResultCompressionConfig.apiKey} onChangeText={(apiKey) => setToolResultCompressionConfig({ apiKey })} placeholder="sk-..." placeholderTextColor={colors.textTertiary} secureTextEntry autoCapitalize="none" /></View>
+            <View style={styles.field}><Text style={styles.label}>模型</Text><TextInput style={styles.input} value={toolResultCompressionConfig.model} onChangeText={(model) => setToolResultCompressionConfig({ model })} placeholder="gpt-4.1-mini" placeholderTextColor={colors.textTertiary} autoCapitalize="none" /></View>
+            <View style={styles.field}>
+              <Text style={styles.label}>触发压缩阈值（估算 tokens）</Text>
+              <Text style={styles.hint}>只有已选工具的返回结果达到此大小才调用压缩 API，小结果保留原文。</Text>
+              <TextInput style={styles.input} value={String(toolResultCompressionConfig.thresholdTokens)} onChangeText={(value) => setToolResultCompressionConfig({ thresholdTokens: parseInt(value, 10) || 1000 })} keyboardType="number-pad" placeholder="1000" placeholderTextColor={colors.textTertiary} />
+            </View>
+            <View style={styles.field}><Text style={styles.label}>最大输出 tokens</Text><TextInput style={styles.input} value={String(toolResultCompressionConfig.maxOutputTokens)} onChangeText={(value) => setToolResultCompressionConfig({ maxOutputTokens: parseInt(value, 10) || 800 })} keyboardType="number-pad" placeholder="800" placeholderTextColor={colors.textTertiary} /></View>
+            <View style={styles.field}>
+              <Text style={styles.label}>需要压缩的工具</Text>
+              <Text style={styles.hint}>每行一个工具名，也支持逗号分隔；未列出的工具会在后续轮次保留完整结果。</Text>
+              <TextInput
+                style={[styles.input, styles.multilineInput]}
+                value={toolResultCompressionConfig.toolNames.join('\n')}
+                onChangeText={(value) => setToolResultCompressionConfig({ toolNames: value.split(/[\n,]/).map((name) => name.trim()).filter(Boolean) })}
+                placeholder={'web_search\nssh_read_file\nwebview_observe'}
+                placeholderTextColor={colors.textTertiary}
+                autoCapitalize="none"
+                multiline
+                textAlignVertical="top"
+              />
+            </View>
+            <View style={styles.field}>
+              <Text style={styles.label}>自定义压缩提示词</Text>
+              <TextInput style={[styles.input, styles.multilineInput]} value={toolResultCompressionConfig.prompt} onChangeText={(prompt) => setToolResultCompressionConfig({ prompt })} multiline textAlignVertical="top" placeholder="说明需要保留和删除的信息" placeholderTextColor={colors.textTertiary} />
+            </View>
+          </View>
+        )}
       </ScrollView>
       <BuiltInToolModal
         styles={styles}

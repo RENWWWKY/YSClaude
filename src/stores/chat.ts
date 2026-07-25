@@ -718,6 +718,66 @@ interface ChatState {
   setMessageHidden: (id: string, hidden: boolean) => Promise<void>;
 }
 
+async function compressToolInvocationResults(
+  invocations: ToolInvocation[] | undefined,
+  conversationId: string,
+  messageId: string
+): Promise<ToolInvocation[] | undefined> {
+  if (!invocations?.length) return invocations;
+  const config = useSettingsStore.getState().toolResultCompressionConfig;
+  const selectedTools = new Set(config.toolNames);
+  if (
+    !config.enabled || !config.baseUrl.trim() || !config.apiKey.trim() ||
+    !config.model.trim() || selectedTools.size === 0
+  ) return invocations;
+
+  return Promise.all(invocations.map(async (invocation) => {
+    if (!invocation.result || !selectedTools.has(invocation.name)) return invocation;
+    // 不引入特定模型 tokenizer：CJK 字符通常接近 1 token，其他文本按约 4 chars/token
+    // 估算。阈值仅用于避免对小结果发起压缩请求，不用于 API 计费统计。
+    const cjkCount = (invocation.result.match(/[\u3400-\u9fff\uf900-\ufaff]/g) || []).length;
+    const resultTokenEstimate = Math.max(
+      1,
+      cjkCount + Math.ceil((invocation.result.length - cjkCount) / 4)
+    );
+    if (resultTokenEstimate < config.thresholdTokens) {
+      return { ...invocation, resultTokenEstimate };
+    }
+    try {
+      let compressed = '';
+      const completion = await streamChatCompletion({
+        baseUrl: config.baseUrl,
+        apiKey: config.apiKey,
+        model: config.model,
+        messages: [
+          { role: 'system', content: config.prompt },
+          {
+            role: 'user',
+            content: `工具名：${invocation.name}\n参数：${invocation.args || '{}'}\n\n工具返回结果：\n${invocation.result}`,
+          },
+        ],
+        maxTokens: config.maxOutputTokens,
+        temperature: 0,
+        usageContext: {
+          feature: 'chat',
+          requestKind: 'tool-result-compression',
+          conversationId,
+          messageId,
+          metadata: { toolName: invocation.name },
+        },
+      }, (token) => { compressed += token; });
+      const finalText = (completion.content || compressed)
+        .replace(/<thinking>[\s\S]*?<\/thinking>/gi, '')
+        .trim();
+      return finalText
+        ? { ...invocation, compressedResult: finalText, compressionError: undefined, resultTokenEstimate }
+        : { ...invocation, compressionError: '压缩 API 返回了空内容', resultTokenEstimate };
+    } catch (error: any) {
+      return { ...invocation, compressionError: error?.message || String(error), resultTokenEstimate };
+    }
+  }));
+}
+
 interface ChatTriggerResponseOptions {
   skipStickerInstruction?: boolean;
   additionalRuntimeSections?: string[];
@@ -1798,6 +1858,7 @@ async function runToolLoop(
     content: cloneContent(message.content),
   }));
   let toolCallCount = 0;
+  let toolCallRound = 0;
   let streamedContent = '';
   let totalTokens = 0;
   const emitToken = (token: string) => {
@@ -1852,6 +1913,7 @@ async function runToolLoop(
       assistantToolMessage.content = message.content;
     }
     messages.push(assistantToolMessage);
+    toolCallRound++;
 
     // 依次执行每个工具调用，结果作为 tool message 追加
     const deferredImageContextMessages: ChatMessage[] = [];
@@ -1864,6 +1926,7 @@ async function runToolLoop(
         args: tc.function.arguments || '',
         status: 'running',
         contentOffset: streamedContent.length,
+        round: toolCallRound,
       });
       let args: Record<string, any> = {};
       try {
@@ -1879,6 +1942,7 @@ async function runToolLoop(
           result: '等待用户回答',
           status: 'done',
           contentOffset: streamedContent.length,
+          round: toolCallRound,
         });
         return { handled: true, totalTokens };
       }
@@ -1922,6 +1986,7 @@ async function runToolLoop(
         result: displayResult,
         status: 'done',
         contentOffset: streamedContent.length,
+        round: toolCallRound,
       });
       messages.push({
         role: 'tool',
@@ -2066,9 +2131,52 @@ async function streamAssistantResponse(
     };
   });
 
-  const apiMessages = await Promise.all(apiMessagesPromises);
-  const pendingApiMessages = apiMessages.slice(pendingInputStartIndex);
-  const historyApiMessages = apiMessages.slice(0, pendingInputStartIndex);
+  const renderedApiMessages = await Promise.all(apiMessagesPromises);
+  // 持久层继续使用单个 assistant 气泡；请求模型时展开为标准 Agent transcript：
+  // assistant.tool_calls -> tool results -> assistant final content。
+  const expandAgentTranscript = (source: Message, renderedMessage: ChatMessage): ChatMessage[] => {
+    const invocations = source.role === 'assistant'
+      ? (source.toolInvocations || []).filter((item) => item.status === 'done' && item.result !== undefined)
+      : [];
+    if (invocations.length === 0) return [renderedMessage];
+
+    const rounds = new Map<number, Array<{ invocation: ToolInvocation; index: number }>>();
+    invocations.forEach((invocation, index) => {
+      const round = invocation.round || index + 1;
+      const group = rounds.get(round) || [];
+      group.push({ invocation, index });
+      rounds.set(round, group);
+    });
+
+    const transcript: ChatMessage[] = [];
+    for (const group of [...rounds.values()]) {
+      const calls = group.map(({ invocation, index }) => ({
+        id: invocation.callId || `${source.id}_tool_${index}`,
+        type: 'function' as const,
+        function: { name: invocation.name, arguments: invocation.args || '{}' },
+      }));
+      transcript.push({ role: 'assistant', content: '', tool_calls: calls });
+      group.forEach(({ invocation }, index) => {
+        transcript.push({
+          role: 'tool',
+          tool_call_id: calls[index].id,
+          content: invocation.compressedResult || invocation.result || '',
+        });
+      });
+    }
+    transcript.push(renderedMessage);
+    return transcript;
+  };
+  // 必须先按 UI 消息切分历史/本轮输入，再展开工具轨迹；展开后的元素数量不再
+  // 与 filtered 的楼层下标一一对应。
+  const historyApiMessages = renderedApiMessages
+    .slice(0, pendingInputStartIndex)
+    .flatMap((message, index) => expandAgentTranscript(filtered[index], message));
+  const pendingApiMessages = renderedApiMessages
+    .slice(pendingInputStartIndex)
+    .flatMap((message, index) =>
+      expandAgentTranscript(filtered[pendingInputStartIndex + index], message)
+    );
 
   const runtimeSections: string[] = [];
   const latestUserReactionTargets = getLatestUserMessageGroup(visibleHistoryMessages);
@@ -2416,8 +2524,23 @@ async function streamAssistantResponse(
     if (isEmptyAssistantMessage(responseMessage)) {
       await deleteTransientResponseMessages();
     } else if (responseMessage?.role === 'assistant') {
+      const compressedInvocations = await compressToolInvocationResults(
+        responseMessage.toolInvocations,
+        conversationId,
+        responseMessage.id
+      );
+      if (compressedInvocations !== responseMessage.toolInvocations) {
+        responseMessage.toolInvocations = compressedInvocations;
+        set((state) => ({
+          messages: state.messages.map((message) =>
+            message.id === responseMessage.id
+              ? { ...message, toolInvocations: compressedInvocations }
+              : message
+          ),
+        }));
+      }
       await updateMessageContent(responseMessage.id, responseMessage.content);
-      await updateMessageToolInvocations(responseMessage.id, responseMessage.toolInvocations);
+      await updateMessageToolInvocations(responseMessage.id, compressedInvocations);
       processPicturesForAssistantMessage(get, set, responseMessage.id, responseMessage.content).catch((error) => {
         console.warn('[Chat] 处理 AI 生图失败:', error);
       });

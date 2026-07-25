@@ -472,6 +472,38 @@ export interface PromptCacheConfig {
   dingTalkAtMobiles: string;
 }
 
+export interface ToolResultCompressionConfig {
+  enabled: boolean;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  prompt: string;
+  toolNames: string[];
+  thresholdTokens: number;
+  maxOutputTokens: number;
+}
+
+export const DEFAULT_TOOL_RESULT_COMPRESSION_PROMPT = `请压缩下面的工具执行结果，供 Agent 在后续对话中继续工作。
+必须保留关键事实、标识符、路径、URL、错误、数值、已执行变更和后续操作所需信息。
+删除重复内容、无关日志和冗长格式。不要虚构信息，只输出压缩结果。`;
+
+function normalizeToolResultCompressionConfig(
+  config?: Partial<ToolResultCompressionConfig>
+): ToolResultCompressionConfig {
+  return {
+    enabled: config?.enabled ?? false,
+    baseUrl: config?.baseUrl || '',
+    apiKey: config?.apiKey || '',
+    model: config?.model || '',
+    prompt: config?.prompt || DEFAULT_TOOL_RESULT_COMPRESSION_PROMPT,
+    toolNames: Array.isArray(config?.toolNames)
+      ? [...new Set(config.toolNames.map((name) => name.trim()).filter(Boolean))]
+      : [],
+    thresholdTokens: Math.max(1, config?.thresholdTokens || 1000),
+    maxOutputTokens: Math.max(64, config?.maxOutputTokens || 800),
+  };
+}
+
 export interface ImageGenerationFaceReference {
   id: string;
   uri: string;
@@ -925,6 +957,7 @@ interface SettingsState {
   floatingBallConfig: FloatingBallConfig;
   periodConfig: PeriodConfig;
   promptCacheConfig: PromptCacheConfig;
+  toolResultCompressionConfig: ToolResultCompressionConfig;
   imageGenerationConfig: ImageGenerationConfig;
   imageGenerationPrompt: string;
   incomingLetterConfig: IncomingLetterConfig;
@@ -972,6 +1005,7 @@ interface SettingsState {
   setFloatingBallConfig: (config: Partial<FloatingBallConfig>) => void;
   setPeriodConfig: (config: Partial<PeriodConfig>) => void;
   setPromptCacheConfig: (config: Partial<PromptCacheConfig>) => void;
+  setToolResultCompressionConfig: (config: Partial<ToolResultCompressionConfig>) => void;
   setImageGenerationConfig: (config: Partial<ImageGenerationConfig>) => void;
   setImageGenerationPrompt: (prompt: string) => void;
   setIncomingLetterConfig: (config: Partial<IncomingLetterConfig>) => void;
@@ -1261,6 +1295,7 @@ export const useSettingsStore = create<SettingsState>()(
         dingTalkSecret: '',
         dingTalkAtMobiles: '',
       },
+      toolResultCompressionConfig: normalizeToolResultCompressionConfig(),
       imageGenerationConfig: {
         enabled: false,
         baseUrl: '',
@@ -1571,6 +1606,13 @@ export const useSettingsStore = create<SettingsState>()(
             },
           },
         })),
+      setToolResultCompressionConfig: (config) =>
+        set((state) => ({
+          toolResultCompressionConfig: normalizeToolResultCompressionConfig({
+            ...state.toolResultCompressionConfig,
+            ...config,
+          }),
+        })),
       setDynamicIslandConfig: (config) =>
         set((state) => ({
           dynamicIslandConfig: {
@@ -1803,6 +1845,7 @@ export const useSettingsStore = create<SettingsState>()(
         floatingBallConfig: state.floatingBallConfig,
         periodConfig: state.periodConfig,
         promptCacheConfig: state.promptCacheConfig,
+        toolResultCompressionConfig: state.toolResultCompressionConfig,
         imageGenerationConfig: state.imageGenerationConfig,
         imageGenerationPrompt: state.imageGenerationPrompt,
         incomingLetterConfig: state.incomingLetterConfig,
@@ -1830,6 +1873,7 @@ export const useSettingsStore = create<SettingsState>()(
           },
           todayWidgetConfig: normalizeTodayWidgetConfig(state?.todayWidgetConfig),
           promptCacheConfig: normalizePromptCacheConfig(state?.promptCacheConfig),
+          toolResultCompressionConfig: normalizeToolResultCompressionConfig(state?.toolResultCompressionConfig),
           ttsConfig: normalizeTTSConfig(state?.ttsConfig),
           sttConfig: normalizeSTTConfig(state?.sttConfig),
           voiceCallTTSProvider: state?.voiceCallTTSProvider || state?.ttsConfig?.provider || 'minimax',

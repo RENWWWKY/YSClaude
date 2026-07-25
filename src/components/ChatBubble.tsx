@@ -2138,8 +2138,24 @@ export const ChatBubble = React.memo(function ChatBubble({
                   <>
                     <Text style={styles.summaryDetailLabel}>参数</Text>
                     <Text style={[styles.summaryDetailText, summaryRegularTextStyle]} selectable>{formatDebugJson(summaryDetail.invocation.args)}</Text>
-                    <Text style={styles.summaryDetailLabel}>结果</Text>
+                    <Text style={styles.summaryDetailLabel}>
+                      原始结果{summaryDetail.invocation.resultTokenEstimate
+                        ? `（约 ${summaryDetail.invocation.resultTokenEstimate} tokens）`
+                        : ''}
+                    </Text>
                     <Text style={[styles.summaryDetailText, summaryRegularTextStyle]} selectable>{summaryDetail.invocation.result || '尚未返回结果'}</Text>
+                    {!!summaryDetail.invocation.compressedResult && (
+                      <>
+                        <Text style={styles.summaryDetailLabel}>跨轮压缩结果</Text>
+                        <Text style={[styles.summaryDetailText, summaryRegularTextStyle]} selectable>{summaryDetail.invocation.compressedResult}</Text>
+                      </>
+                    )}
+                    {!!summaryDetail.invocation.compressionError && (
+                      <>
+                        <Text style={styles.summaryDetailLabel}>压缩失败</Text>
+                        <Text style={[styles.summaryDetailText, summaryRegularTextStyle]} selectable>{summaryDetail.invocation.compressionError}</Text>
+                      </>
+                    )}
                   </>
                 )}
               </ScrollView>

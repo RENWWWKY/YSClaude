@@ -70,6 +70,10 @@ export interface ToolInvocation {
   name: string;        // 工具名，如 web_search
   args: string;        // 原始参数 JSON 字符串
   result?: string;     // 工具执行结果或错误文本，供展开调试查看
+  compressedResult?: string; // 下一轮 Agent 上下文使用；当前轮仍使用完整 result
+  compressionError?: string;
+  resultTokenEstimate?: number;
+  round?: number;      // 同一次模型响应返回的 tool_calls 分组
   status?: 'running' | 'done';
   contentOffset?: number; // 工具调用发生时，AI 原始回复内容已经生成到的位置
 }
