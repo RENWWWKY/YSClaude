@@ -1,6 +1,6 @@
 import { randomUUID } from 'expo-crypto';
 import { streamChatCompletion, type ChatMessage } from './api';
-import { executeTool, getToolDefinitions } from './tools';
+import { executeTool, getPermissiveMcpToolConfig, getToolPoolDefinitions } from './tools';
 import { useSettingsStore, type SubAgentProfile } from '../stores/settings';
 import { appendAgentRunEvent, createAgentRun, finishAgentRun } from '../db/agentRuns';
 
@@ -50,24 +50,11 @@ export async function runSubAgent(
     { role: 'user', content: task },
   ];
   const allowed = new Set(profile.allowedToolNames);
-  let tools = getToolDefinitions({
-    memoryVault: settings.memoryVaultConfig.enabled,
-    memoryVaultConfig: settings.memoryVaultConfig,
-    webSearch: settings.webSearchConfig.enabled && !!settings.webSearchConfig.tavilyApiKey,
-    webInteraction: settings.webInteractionConfig.enabled,
-    conversationArtifacts: settings.conversationArtifactToolConfig.enabled,
-    conversationWindows: settings.conversationWindowToolConfig.enabled,
-    htmlArtifacts: settings.htmlArtifactToolConfig.enabled,
-    hotboard: settings.hotboardConfig.enabled,
-    runCommand: settings.runCommandConfig.enabled ? settings.runCommandConfig : undefined,
-    nativeTools: settings.nativeToolConfig,
-    mcpTools: settings.mcpToolConfig,
-    qqBotTools: settings.qqBotToolConfig.enabled,
-    wechatClawBotTools: settings.wechatClawBotToolConfig.enabled,
-    discordBotTools: settings.discordBotToolConfig.enabled,
-    subAgents: settings.subAgentConfig.enabled && remainingDepth > 0,
-  });
-  tools = tools.filter((tool) => allowed.has(tool.function.name) || (tool.function.name === 'dispatch_subagent' && remainingDepth > 0));
+  let tools = getToolPoolDefinitions();
+  tools = tools.filter((tool) => tool.function.name === 'dispatch_subagent'
+    ? remainingDepth > 0
+    : allowed.has(tool.function.name));
+  const subAgentMcpToolConfig = getPermissiveMcpToolConfig();
 
   let toolCallCount = 0;
   let totalTokens = 0;
@@ -109,7 +96,7 @@ export async function runSubAgent(
           hotboardConfig: settings.hotboardConfig,
           runCommandConfig: settings.runCommandConfig,
           nativeToolConfig: settings.nativeToolConfig,
-          mcpToolConfig: settings.mcpToolConfig,
+          mcpToolConfig: subAgentMcpToolConfig,
           qqBotToolConfig: settings.qqBotToolConfig,
           wechatClawBotToolConfig: settings.wechatClawBotToolConfig,
           discordBotToolConfig: settings.discordBotToolConfig,

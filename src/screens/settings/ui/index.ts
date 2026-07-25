@@ -6,3 +6,4 @@ export { TextInputDialog } from './TextInputDialog';
 export { SelectRow } from './SelectRow';
 export { OptionListDialog, type SelectOption } from './OptionListDialog';
 export { ButtonRow } from './ButtonRow';
+export { MultiSelectDialog, type MultiSelectOption } from './MultiSelectDialog';

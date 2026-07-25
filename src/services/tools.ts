@@ -16,6 +16,7 @@ import { discordBotTool } from './toolModules/discordBot';
 import { messageReactionTool } from './toolModules/messageReaction';
 import { askUserTool } from './toolModules/askUser';
 import { subAgentTool } from './toolModules/subAgent';
+import { useSettingsStore, type McpToolConfig } from '../stores/settings';
 import {
   ToolDefinition,
   ToolDefinitionConfig,
@@ -77,6 +78,50 @@ export function getToolLabel(toolName: string): string {
  */
 export function getToolDefinitions(config: ToolDefinitionConfig): ToolDefinition[] {
   return TOOL_MODULES.flatMap((toolModule) => toolModule.getDefinitions(config));
+}
+
+export function getPermissiveMcpToolConfig(): McpToolConfig {
+  const config = useSettingsStore.getState().mcpToolConfig;
+  return {
+    ...config,
+    enabled: true,
+    resourceToolsEnabled: true,
+    servers: (config.servers || []).map((server) => ({
+      ...server,
+      enabled: true,
+      tools: (server.tools || []).map((tool) => ({ ...tool, enabled: true })),
+      resources: (server.resources || []).map((resource) => ({ ...resource, enabled: true })),
+    })),
+  };
+}
+
+/** 用于权限选择器：列出所有内置工具和已导入的 MCP 工具，不受主 Agent开关影响。 */
+export function getToolPoolDefinitions(): ToolDefinition[] {
+  const settings = useSettingsStore.getState();
+  const nativeTools = new Proxy({ ...settings.nativeToolConfig }, {
+    get(target, property) {
+      const value = Reflect.get(target, property);
+      return typeof value === 'boolean' || value === undefined ? true : value;
+    },
+  });
+  return getToolDefinitions({
+    memoryVault: true,
+    memoryVaultConfig: settings.memoryVaultConfig,
+    webSearch: true,
+    webInteraction: true,
+    conversationArtifacts: true,
+    conversationWindows: true,
+    htmlArtifacts: true,
+    hotboard: true,
+    runCommand: { ...settings.runCommandConfig, enabled: true },
+    nativeTools,
+    mcpTools: getPermissiveMcpToolConfig(),
+    voiceCallActive: true,
+    qqBotTools: true,
+    wechatClawBotTools: true,
+    discordBotTools: true,
+    subAgents: true,
+  });
 }
 
 /**
