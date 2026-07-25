@@ -93,8 +93,8 @@ export async function runSubAgent(
       }
       const acceptedCalls = calls.slice(0, profile.maxToolCalls - toolCallCount);
       messages.push({ role: 'assistant', content: response.content || '', tool_calls: acceptedCalls });
-      for (const call of acceptedCalls) {
-        toolCallCount++;
+      toolCallCount += acceptedCalls.length;
+      const executeCall = async (call: (typeof acceptedCalls)[number]) => {
         let args: Record<string, unknown> = {};
         try { args = JSON.parse(call.function.arguments || '{}'); } catch { /* executor receives empty args */ }
         const result = await executeTool(call.function.name, args, {
@@ -116,8 +116,20 @@ export async function runSubAgent(
           subAgentRunId: runId,
           subAgentDepth: depth,
           subAgentRemainingDepth: remainingDepth,
+          abortSignal: controller.signal,
         });
-        const toolResult = resultText(result);
+        return resultText(result);
+      };
+      const toolResults = acceptedCalls.length > 1 && acceptedCalls.every((call) => call.function.name === 'dispatch_subagent')
+        ? await Promise.all(acceptedCalls.map(executeCall))
+        : await acceptedCalls.reduce<Promise<string[]>>(async (pending, call) => {
+            const collected = await pending;
+            collected.push(await executeCall(call));
+            return collected;
+          }, Promise.resolve([]));
+      for (let index = 0; index < acceptedCalls.length; index++) {
+        const call = acceptedCalls[index];
+        const toolResult = toolResults[index];
         await appendAgentRunEvent({ runId, sequence: ++eventSequence, type: 'tool', toolCallId: call.id, toolName: call.function.name, toolArgs: call.function.arguments || '{}', toolResult });
         messages.push({ role: 'tool', tool_call_id: call.id, content: toolResult });
       }

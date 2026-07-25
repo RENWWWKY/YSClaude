@@ -1916,6 +1916,70 @@ async function runToolLoop(
     messages.push(assistantToolMessage);
     toolCallRound++;
 
+    // 纯子 Agent派发批次彼此独立：同时执行，但严格按模型返回顺序回填 tool result。
+    // 混合了其他工具的批次仍走下方串行路径，避免破坏潜在的读写依赖。
+    const isParallelSubAgentBatch =
+      toolCalls.length > 1 &&
+      toolCallCount + toolCalls.length <= maxToolCalls &&
+      toolCalls.every((tc) => tc.function.name === 'dispatch_subagent');
+    if (isParallelSubAgentBatch) {
+      const batchOffset = streamedContent.length;
+      for (const tc of toolCalls) {
+        toolCallCount++;
+        onToolInvocation?.({
+          callId: tc.id,
+          name: tc.function.name,
+          args: tc.function.arguments || '',
+          status: 'running',
+          contentOffset: batchOffset,
+          round: toolCallRound,
+        });
+      }
+      const results = await Promise.all(toolCalls.map(async (tc) => {
+        let args: Record<string, any> = {};
+        try {
+          args = JSON.parse(tc.function.arguments || '{}');
+        } catch {
+          args = {};
+        }
+        return executeTool(tc.function.name, args, {
+          conversationId: options?.conversationId,
+          messageId: options?.messageId,
+          memoryVaultConfig: settings.memoryVaultConfig,
+          webSearchConfig: settings.webSearchConfig,
+          webInteractionConfig: { ...settings.webInteractionConfig, enabled: webInteractionEnabled },
+          conversationArtifactToolConfig: { ...settings.conversationArtifactToolConfig, enabled: conversationArtifactToolsEnabled },
+          conversationWindowToolConfig: settings.conversationWindowToolConfig,
+          htmlArtifactToolConfig: { ...settings.htmlArtifactToolConfig, enabled: htmlArtifactToolsEnabled },
+          hotboardConfig: settings.hotboardConfig,
+          runCommandConfig: settings.runCommandConfig,
+          nativeToolConfig: settings.nativeToolConfig,
+          mcpToolConfig: settings.mcpToolConfig,
+          qqBotToolConfig: settings.qqBotToolConfig,
+          wechatClawBotToolConfig: settings.wechatClawBotToolConfig,
+          discordBotToolConfig: settings.discordBotToolConfig,
+          webCruiseEnabled,
+          subAgentDepth: 0,
+          abortSignal: signal,
+        });
+      }));
+      results.forEach((result, index) => {
+        const tc = toolCalls[index];
+        const resultText = getToolResultText(result);
+        onToolInvocation?.({
+          callId: tc.id,
+          name: tc.function.name,
+          args: tc.function.arguments || '',
+          result: getToolResultDisplayContent(result),
+          status: 'done',
+          contentOffset: streamedContent.length,
+          round: toolCallRound,
+        });
+        messages.push({ role: 'tool', tool_call_id: tc.id, content: resultText });
+      });
+      continue;
+    }
+
     // 依次执行每个工具调用，结果作为 tool message 追加
     const deferredImageContextMessages: ChatMessage[] = [];
     for (const tc of toolCalls) {

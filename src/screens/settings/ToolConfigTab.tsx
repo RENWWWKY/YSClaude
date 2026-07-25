@@ -1961,6 +1961,7 @@ export function ToolConfigTab({ showToast, keyboardBottomInset }: SettingsTabPro
   const otherFeatureCards = [dailyPaperSourcesCard, locationShareCard];
 
   const builtInToolCards = [
+    { key: 'subAgent', name: '子 Agent 派发', intro: '允许主 Agent把独立任务派发给已配置的子 Agent；同一轮多个派发会并行执行。', enabled: subAgentConfig.enabled, onValueChange: (enabled: boolean) => setSubAgentConfig({ enabled }), meta: `${subAgentConfig.profiles.filter((profile) => profile.enabled).length} 个可用` },
     { key: 'askUser', name: '选项卡追问', intro: '允许 AI 在需要补充信息时展示问题和快捷选项，回答完成后继续对话。', enabled: askUserEnabled, onValueChange: (value: boolean) => handleNativeToolEnabledChange('askUserEnabled', value), meta: `${askUserMinQuestions}-${askUserMaxQuestions} 题 · ${askUserMinOptions}-${askUserMaxOptions} 项` },
     { key: 'messageReaction', name: '消息表情回应', intro: '允许 AI 给用户消息贴 emoji，并配置用户给 AI 消息回应时的两个表情面板。', enabled: messageReactionEnabled, onValueChange: (value: boolean) => handleNativeToolEnabledChange('messageReactionEnabled', value), meta: `${normalizeReactionEmojiList(aiReactionEmojis, DEFAULT_AI_REACTION_EMOJIS).length} 个 AI 表情` },
     { key: 'shizukuShell', name: 'Shizuku 本机终端', intro: '允许 AI 以 Shizuku 身份在当前 Android 设备执行 Shell 命令。', enabled: shizukuShellEnabled, onValueChange: (value: boolean) => handleNativeToolEnabledChange('shizukuShellEnabled', value), meta: '超时 ' + shellTimeoutMs + ' ms' },
@@ -1994,7 +1995,7 @@ export function ToolConfigTab({ showToast, keyboardBottomInset }: SettingsTabPro
     { title: '设备信息', keys: ['deviceInfo', 'batteryStatus', 'appUsageStats', 'notificationReader', 'clipboardReader'] },
     { title: 'Bot 与软件联动', keys: ['qqBotTools', 'wechatClawBotTools', 'discordBotTools'] },
     { title: '通话控制', keys: ['aiVoiceCall', 'aiVoiceCallHangup'] },
-    { title: '命令与自动化', keys: ['shizukuShell', 'runCommand'] },
+    { title: '命令与自动化', keys: ['subAgent', 'shizukuShell', 'runCommand'] },
   ].map((group) => ({
     title: group.title,
     tools: group.keys
@@ -2104,6 +2105,9 @@ export function ToolConfigTab({ showToast, keyboardBottomInset }: SettingsTabPro
 
   function handleSaveBuiltInTool(toolKey: string) {
           switch (toolKey) {
+            case 'subAgent':
+              showToast(subAgentConfig.enabled ? '子 Agent派发工具已开启' : '子 Agent派发工具已关闭');
+              break;
             case 'askUser':
               handleSaveNativeTools();
               break;
@@ -2164,6 +2168,9 @@ export function ToolConfigTab({ showToast, keyboardBottomInset }: SettingsTabPro
         style: 'destructive',
         onPress: () => {
           switch (toolKey) {
+            case 'subAgent':
+              setSubAgentConfig({ enabled: false });
+              break;
             case 'messageReaction':
               setMessageReactionEnabled(false);
               setNativeToolConfig({ messageReactionEnabled: false });
@@ -2293,6 +2300,8 @@ export function ToolConfigTab({ showToast, keyboardBottomInset }: SettingsTabPro
 
   function renderBuiltInToolEditor(toolKey: string) {
     switch (toolKey) {
+      case 'subAgent':
+        return (<><Text style={styles.toolModalDescription}>开启后，主 Agent会获得 dispatch_subagent 工具。同一次模型响应中的多个纯子 Agent派发会并行执行，并按原调用顺序回填结果。</Text><View style={styles.switchRow}><View style={styles.switchText}><Text style={styles.label}>启用子 Agent派发工具</Text><Text style={styles.hint}>Agent 的 API、模型、提示词、权限和嵌套深度在“上下文”页配置。</Text></View><Switch value={subAgentConfig.enabled} onValueChange={(enabled) => setSubAgentConfig({ enabled })} trackColor={{ false: colors.inputBorder, true: colors.primary }} /></View></>);
       case 'askUser':
         return (
           <>
@@ -2876,13 +2885,7 @@ export function ToolConfigTab({ showToast, keyboardBottomInset }: SettingsTabPro
         />}
         {toolSettingsPage === 'context' && (
           <View style={{ paddingHorizontal: 20, paddingTop: 18, gap: 14 }}>
-            <View style={styles.switchRow}>
-              <View style={styles.switchText}>
-                <Text style={styles.label}>启用子 Agent</Text>
-                <Text style={styles.hint}>主 Agent 可把独立任务派发给下方已启用的 Agent。</Text>
-              </View>
-              <Switch value={subAgentConfig.enabled} onValueChange={(enabled) => setSubAgentConfig({ enabled })} trackColor={{ false: colors.inputBorder, true: colors.primary }} />
-            </View>
+            <Text style={styles.hint}>子 Agent派发工具的总开关位于“内置工具 → 命令与自动化”。这里管理各个 Agent的运行配置。</Text>
             {subAgentConfig.profiles.map((profile) => (
               <View key={profile.id} style={{ gap: 10, padding: 12, borderWidth: 1, borderColor: colors.inputBorder, borderRadius: 12 }}>
                 <View style={styles.switchRow}>
