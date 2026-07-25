@@ -32,7 +32,9 @@ YSClaude 是一个基于 Expo 和 React Native 的 Android 优先 AI 伴侣应�
   - 新增查天气、查看剪切板、编辑联系人和发短信/拨号工具
   - 新增discord bot工具
   - 新增模拟iOS灵动岛
-
+- 2026.07.25
+  - 更新tools调用结构，采用Claude Code工具结果插入结构
+  - 更新子Agent
 
 
 
