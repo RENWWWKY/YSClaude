@@ -217,7 +217,7 @@ export default function MusicScreen() {
     router.replace(from === 'mine' ? '/music-playlists' : '/music');
   }, [from, minimizePlayer, router]);
   const handleClose = useCallback(() => {
-    router.replace('/');
+    router.dismissTo('/');
     closePlayer().catch((closeError) => {
       console.warn('关闭音乐播放器失败:', closeError);
     });

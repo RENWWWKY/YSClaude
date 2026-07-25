@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Pressable, Image, Alert, TextInput, Modal, Dimensions, ScrollView, ActivityIndicator, type ImageStyle, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Image, Alert, TextInput, Modal, Dimensions, ScrollView, ActivityIndicator, Animated, Easing, type ImageStyle, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { NativeViewGestureHandler, ScrollView as GestureScrollView } from 'react-native-gesture-handler';
 import Markdown from '@ronradtke/react-native-markdown-display';
 import * as Clipboard from 'expo-clipboard';
@@ -434,13 +434,11 @@ function getThinkingPreview(thinking: string): string {
   return (plainText.match(/^.*?[。！？.!?]/)?.[0] || plainText).trim();
 }
 
-function ThinkingBlock({ thinking }: { thinking: string }) {
-  const [expanded, setExpanded] = useState(false);
-  const thinkingRules = useMemo(() => createMarkdownRules(), []);
+function ThinkingBlock({ thinking, onPress }: { thinking: string; onPress: () => void }) {
   const preview = getThinkingPreview(thinking);
   return (
     <View style={styles.thinkingWrap}>
-      <Pressable style={styles.toolInlineItem} onPress={() => setExpanded((v) => !v)}>
+      <Pressable style={styles.toolInlineItem} onPress={onPress}>
         <View style={styles.toolRow}>
           <Image
             source={require('../../assets/clock.png')}
@@ -451,22 +449,30 @@ function ThinkingBlock({ thinking }: { thinking: string }) {
             {preview}
           </Text>
           <Image
-            source={expanded
-              ? require('../../assets/arrow-down.png')
-              : require('../../assets/arrow-right.png')}
+            source={require('../../assets/arrow-right.png')}
             style={styles.toolIconRight}
             resizeMode="contain"
           />
         </View>
       </Pressable>
-      {expanded && (
-        <View style={styles.toolDetailBox}>
-          <Markdown style={thinkingMarkdownStyles} rules={thinkingRules} markdownit={latexMarkdownIt}>{thinking}</Markdown>
-        </View>
-      )}
     </View>
   );
 }
+
+function extractThinkingParts(raw: string): string[] {
+  const parts: string[] = [];
+  const pattern = /<thinking>([\s\S]*?)(?:<\/thinking>|$)/gi;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(raw)) !== null) {
+    const content = match[1].trim();
+    if (content) parts.push(content);
+  }
+  return parts;
+}
+
+type SummaryDetail =
+  | { type: 'thinking'; index: number; content: string }
+  | { type: 'tool'; index: number; invocation: ToolInvocation };
 
 // 从 AI 输出中拆出所有思维链与剩余正文。
 function splitThinking(raw: string): { thinking: string; body: string } {
@@ -867,11 +873,9 @@ export const ChatBubble = React.memo(function ChatBubble({
   blurEnabled = true,
   blurTarget,
   onBubblePress,
-  onToolDetailScrollActiveChange,
 }: Props) {
   colors = useThemeColors();
   styles = useMemo(() => createStyles(colors), [colors]);
-  thinkingMarkdownStyles = useMemo(() => createThinkingMarkdownStyles(colors), [colors]);
   const appearanceConfig = useSettingsStore((state) => state.appearanceConfig);
   const stickerConfig = useSettingsStore((state) => state.stickerConfig);
   const customCssStyles = useMemo(
@@ -950,6 +954,16 @@ export const ChatBubble = React.memo(function ChatBubble({
   const assistantTextColor = appearanceConfig?.assistantTextColor || colors.text;
   const assistantTextStrokeColor = appearanceConfig?.assistantTextStrokeColor || colors.background;
   const assistantTextStrokeWidth = numberOrDefault(appearanceConfig?.assistantTextStrokeWidth, 0, 0, 8);
+  const summaryRegularTextStyle = useMemo(
+    () => ({
+      color: assistantTextColor,
+      fontSize: assistantFontSize,
+      lineHeight: Math.round(assistantFontSize * 1.5),
+      fontFamily: fonts.serif,
+      fontWeight: 'normal' as const,
+    }),
+    [assistantFontSize, assistantTextColor]
+  );
   const userTextStyle = useMemo(
     () => [
       {
@@ -1109,7 +1123,10 @@ export const ChatBubble = React.memo(function ChatBubble({
   const [isTTSPlaying, setIsTTSPlaying] = useState(false);
   // 长按时测量得到的气泡屏幕坐标，用于把菜单锚定到气泡上方
   const [menuAnchor, setMenuAnchor] = useState({ x: 0, y: 0, width: 0, height: 0 });
-  const [expandedTools, setExpandedTools] = useState<Record<number, boolean>>({});
+  const [summaryVisible, setSummaryVisible] = useState(false);
+  const [summaryMaskVisible, setSummaryMaskVisible] = useState(false);
+  const [summaryDetail, setSummaryDetail] = useState<SummaryDetail | null>(null);
+  const summaryTranslateY = useRef(new Animated.Value(Dimensions.get('window').height)).current;
   const bubbleRef = useRef<View>(null);
   const voicePlayerRef = useRef<ReturnType<typeof createAudioPlayer> | null>(null);
   const voicePlayerSubscriptionRef = useRef<{ remove: () => void } | null>(null);
@@ -1620,6 +1637,45 @@ export const ChatBubble = React.memo(function ChatBubble({
 
   // 拆分思维链与正文：<thinking> 内容进胶囊，正文只渲染剩余部分
   const { thinking, body } = splitThinking(message.content);
+  const thinkingParts = extractThinkingParts(message.content);
+  const summaryTools = message.toolInvocations || [];
+  const getNumberedToolTitle = (invocation: ToolInvocation, invocationIndex: number) => {
+    const title = formatToolInvocation(invocation.name, invocation.args);
+    const duplicateCount = summaryTools.filter((item) => item.name === invocation.name).length;
+    if (duplicateCount <= 1) return title;
+    const ordinal = summaryTools
+      .slice(0, invocationIndex + 1)
+      .filter((item) => item.name === invocation.name).length;
+    return `${title} #${ordinal}`;
+  };
+  const openSummary = () => {
+    setSummaryDetail(null);
+    setSummaryMaskVisible(false);
+    setSummaryVisible(true);
+    summaryTranslateY.setValue(Dimensions.get('window').height);
+    requestAnimationFrame(() => {
+      Animated.timing(summaryTranslateY, {
+        toValue: 0,
+        duration: 260,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished) setSummaryMaskVisible(true);
+      });
+    });
+  };
+  const closeSummary = () => {
+    setSummaryMaskVisible(false);
+    Animated.timing(summaryTranslateY, {
+      toValue: Dimensions.get('window').height,
+      duration: 220,
+      easing: Easing.in(Easing.cubic),
+      useNativeDriver: true,
+    }).start(() => {
+      setSummaryVisible(false);
+      setSummaryDetail(null);
+    });
+  };
   const assistantFlowParts = buildAssistantFlowParts(message.content, body, message.toolInvocations);
   const assistantBubbleFlowParts = assistantBubbleStyle === 'bubble'
     ? buildAssistantBubbleFlowParts(assistantFlowParts, messageStickers)
@@ -1715,7 +1771,7 @@ export const ChatBubble = React.memo(function ChatBubble({
       >
         <Pressable
           style={styles.toolRow}
-          onPress={() => setExpandedTools((state) => ({ ...state, [invocationIndex]: !state[invocationIndex] }))}
+          onPress={openSummary}
           onLongPress={() => {
             Alert.alert('删除', '确定删除该工具调用记录？', [
               { text: '取消', style: 'cancel' },
@@ -1729,46 +1785,14 @@ export const ChatBubble = React.memo(function ChatBubble({
             resizeMode="contain"
           />
           <Text style={styles.toolText} numberOfLines={1}>
-            {formatToolInvocation(inv.name, inv.args)}{inv.status === 'running' ? '（执行中）' : ''}
+            {getNumberedToolTitle(inv, invocationIndex)}{inv.status === 'running' ? '（执行中）' : ''}
           </Text>
           <Image
-            source={expandedTools[invocationIndex]
-              ? require('../../assets/arrow-down.png')
-              : require('../../assets/arrow-right.png')}
+            source={require('../../assets/arrow-right.png')}
             style={styles.toolIconRight}
             resizeMode="contain"
           />
         </Pressable>
-        {expandedTools[invocationIndex] && (
-          <View
-            style={styles.toolDetailBox}
-            onTouchStart={(event) => {
-              event.stopPropagation();
-              onToolDetailScrollActiveChange?.(true);
-            }}
-            onTouchEnd={() => onToolDetailScrollActiveChange?.(false)}
-            onTouchCancel={() => onToolDetailScrollActiveChange?.(false)}
-          >
-            <NativeViewGestureHandler shouldActivateOnStart disallowInterruption>
-              <GestureScrollView
-                style={styles.toolDetailScroll}
-                contentContainerStyle={styles.toolDetailScrollContent}
-                nestedScrollEnabled
-                showsVerticalScrollIndicator
-                persistentScrollbar
-                disallowInterruption
-                keyboardShouldPersistTaps="handled"
-                scrollEventThrottle={16}
-                onTouchStart={(event) => event.stopPropagation()}
-              >
-                <Text style={styles.toolDetailLabel}>参数</Text>
-                <Text style={styles.toolDetailText} selectable>{formatDebugJson(inv.args)}</Text>
-                <Text style={styles.toolDetailLabel}>结果</Text>
-                <Text style={styles.toolDetailText} selectable>{inv.result || '尚未返回结果'}</Text>
-              </GestureScrollView>
-            </NativeViewGestureHandler>
-          </View>
-        )}
       </View>
     );
   }
@@ -1918,7 +1942,7 @@ export const ChatBubble = React.memo(function ChatBubble({
       {/* 思维链：<thinking> 包裹的内容拆出，正文只渲染剩余部分 */}
       {thinking.length > 0 && renderAssistantSideRow(
         'assistant-thinking',
-        <ThinkingBlock thinking={thinking} />,
+        <ThinkingBlock thinking={thinking} onPress={openSummary} />,
         false
       )}
       {remoteActivityCardVisible ? (
@@ -2067,6 +2091,87 @@ export const ChatBubble = React.memo(function ChatBubble({
           </Pressable>
         )
       )}
+      <Modal
+        transparent
+        visible={summaryVisible}
+        animationType="none"
+        onRequestClose={closeSummary}
+      >
+        <Pressable
+          style={[styles.summaryOverlay, summaryMaskVisible && styles.summaryOverlayVisible]}
+          onPress={closeSummary}
+        >
+          <Animated.View
+            style={[styles.summarySheet, { transform: [{ translateY: summaryTranslateY }] }]}
+            onStartShouldSetResponder={() => true}
+          >
+            <View style={styles.summaryHandle} />
+            <View style={styles.summaryHeader}>
+              <Pressable
+                style={styles.summaryHeaderButton}
+                onPress={summaryDetail ? () => setSummaryDetail(null) : closeSummary}
+                hitSlop={10}
+              >
+                <Text style={styles.summaryHeaderButtonText}>{summaryDetail ? '‹' : '×'}</Text>
+              </Pressable>
+              <Text style={styles.summaryTitle} numberOfLines={1}>
+                {summaryDetail
+                  ? summaryDetail.type === 'thinking' ? `Thinking ${summaryDetail.index + 1}` : getNumberedToolTitle(summaryDetail.invocation, summaryDetail.index)
+                  : 'Summary'}
+              </Text>
+              <View style={styles.summaryHeaderButton} />
+            </View>
+
+            {summaryDetail ? (
+              <ScrollView
+                style={styles.summaryBody}
+                contentContainerStyle={styles.summaryDetailContent}
+                showsVerticalScrollIndicator
+              >
+                {summaryDetail.type === 'thinking' ? (
+                  <Markdown style={markdownStyles} rules={markdownRules} markdownit={latexMarkdownIt}>
+                    {summaryDetail.content}
+                  </Markdown>
+                ) : (
+                  <>
+                    <Text style={styles.summaryDetailLabel}>参数</Text>
+                    <Text style={[styles.summaryDetailText, summaryRegularTextStyle]} selectable>{formatDebugJson(summaryDetail.invocation.args)}</Text>
+                    <Text style={styles.summaryDetailLabel}>结果</Text>
+                    <Text style={[styles.summaryDetailText, summaryRegularTextStyle]} selectable>{summaryDetail.invocation.result || '尚未返回结果'}</Text>
+                  </>
+                )}
+              </ScrollView>
+            ) : (
+              <ScrollView style={styles.summaryBody} contentContainerStyle={styles.summaryList}>
+                {thinkingParts.map((part, index) => (
+                  <Pressable
+                    key={`thinking-${index}`}
+                    style={styles.summaryListItem}
+                    onPress={() => setSummaryDetail({ type: 'thinking', index, content: part })}
+                  >
+                    <View style={styles.summaryBullet} />
+                    <Text style={[styles.summaryItemText, summaryRegularTextStyle]} numberOfLines={2}>{getThinkingPreview(part)}</Text>
+                    <Text style={styles.summaryChevron}>›</Text>
+                  </Pressable>
+                ))}
+                {summaryTools.map((invocation, index) => (
+                  <Pressable
+                    key={`tool-${index}`}
+                    style={styles.summaryListItem}
+                    onPress={() => setSummaryDetail({ type: 'tool', index, invocation })}
+                  >
+                    <View style={[styles.summaryBullet, styles.summaryToolBullet]} />
+                    <Text style={[styles.summaryItemText, summaryRegularTextStyle]} numberOfLines={2}>
+                      {getNumberedToolTitle(invocation, index)}{invocation.status === 'running' ? '（执行中）' : ''}
+                    </Text>
+                    <Text style={styles.summaryChevron}>›</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
+          </Animated.View>
+        </Pressable>
+      </Modal>
       <Modal
         transparent
         visible={assistantMenuVisible}
@@ -3082,6 +3187,116 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   thinkingWrap: {
     marginBottom: 10,
   },
+  summaryOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'transparent',
+  },
+  summaryOverlayVisible: {
+    backgroundColor: 'rgba(0, 0, 0, 0.16)',
+  },
+  summarySheet: {
+    height: Dimensions.get('window').height * 0.5,
+    borderTopLeftRadius: 34,
+    borderTopRightRadius: 34,
+    backgroundColor: colors.background,
+    overflow: 'hidden',
+  },
+  summaryHandle: {
+    alignSelf: 'center',
+    width: 52,
+    height: 5,
+    marginTop: 11,
+    marginBottom: 9,
+    borderRadius: 3,
+    backgroundColor: colors.border,
+  },
+  summaryHeader: {
+    height: 58,
+    paddingHorizontal: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  summaryHeaderButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  summaryHeaderButtonText: {
+    color: colors.text,
+    fontSize: 38,
+    lineHeight: 40,
+    fontWeight: '300',
+  },
+  summaryTitle: {
+    flex: 1,
+    marginHorizontal: 8,
+    color: colors.text,
+    fontSize: 22,
+    lineHeight: 29,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  summaryBody: {
+    flex: 1,
+  },
+  summaryList: {
+    paddingHorizontal: 30,
+    paddingTop: 12,
+    paddingBottom: 42,
+  },
+  summaryListItem: {
+    minHeight: 68,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+  },
+  summaryBullet: {
+    width: 10,
+    height: 10,
+    marginRight: 22,
+    borderRadius: 5,
+    backgroundColor: colors.border,
+  },
+  summaryToolBullet: {
+    backgroundColor: colors.primary,
+    opacity: 0.7,
+  },
+  summaryItemText: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 18,
+    lineHeight: 26,
+  },
+  summaryChevron: {
+    marginLeft: 12,
+    color: colors.conversationMuted,
+    fontSize: 27,
+    lineHeight: 30,
+    fontWeight: '300',
+  },
+  summaryDetailContent: {
+    paddingHorizontal: 32,
+    paddingTop: 16,
+    paddingBottom: 48,
+  },
+  summaryDetailLabel: {
+    marginBottom: 8,
+    color: colors.conversationMuted,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '700',
+  },
+  summaryDetailText: {
+    marginBottom: 24,
+    color: colors.text,
+    fontSize: 14,
+    lineHeight: 21,
+    fontFamily: fonts.mono,
+  },
   actions: {
     flexDirection: 'row',
     marginTop: -4,
@@ -3206,27 +3421,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, backgroundColor: colors.primary,
   },
   modalConfirmText: { fontSize: 15, color: '#FFFFFF', fontWeight: '500' },
-});
-
-const createThinkingMarkdownStyles = (colors: ThemeColors) => StyleSheet.create({
-  body: { width: '100%', fontSize: 14, color: colors.textSecondary, lineHeight: 21, fontFamily: fonts.serif, fontWeight: 'normal' },
-  hr: createMarkdownDividerStyle(colors.textSecondary, true),
-  strong: { fontFamily: fonts.serifStrong, fontWeight: fontWeights.serifStrong, color: colors.textSecondary },
-  markdownStrongText: { fontStyle: 'normal' },
-  ...createMarkdownListStyles(colors.textSecondary, 14, 21, true),
-  ...createMarkdownTableStyles(colors, colors.textSecondary, {
-    cellMinWidth: 112,
-    cellPaddingHorizontal: 9,
-    cellPaddingVertical: 7,
-    marginVertical: 8,
-  }),
-  code_inline: {
-    backgroundColor: colors.surface, color: colors.primary,
-    paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4, fontSize: 13, fontFamily: fonts.mono,
-  },
-  fence: { backgroundColor: colors.codeBlock, borderRadius: 10, padding: 12, marginVertical: 8 },
-  code_block: { color: colors.codeText, fontSize: 12, fontFamily: fonts.mono },
-  link: { color: colors.primary },
 });
 
 function createMarkdownTableStyles(
@@ -3536,5 +3730,4 @@ const createMarkdownStyles = (
 };
 
 let styles = createStyles(colors);
-let thinkingMarkdownStyles = createThinkingMarkdownStyles(colors);
 let markdownStyles = createMarkdownStyles(colors);

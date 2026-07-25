@@ -374,7 +374,10 @@ export function ChatInput({
   );
   const inputPlaceholderTextColor = getAppearancePlaceholderTextColor(inputPlaceholderStyle, colors.conversationMuted);
   const current = apiConfigs[activeConfigIndex];
-  const currentModel = current?.name || current?.model || '未配置';
+  const modelButtonLabelMode = appearanceConfig?.modelButtonLabelMode === 'model' ? 'model' : 'channel';
+  const currentModel = modelButtonLabelMode === 'model'
+    ? current?.model || current?.name || '未配置'
+    : current?.name || current?.model || '未配置';
   const locationMapHtml = useMemo(() => {
     if (!locationDraft || !locationShareConfig?.tencentKey?.trim()) return '';
     return buildLocationMapHtml(

@@ -13,6 +13,7 @@ export type ChatInputIconKey =
   | 'stop';
 
 export type ChatInputAppearanceStyle = 'default' | 'compact';
+export type ModelButtonLabelMode = 'channel' | 'model';
 export type AssistantBubbleAppearanceStyle = 'plain' | 'bubble';
 export type MessageAvatarLayout = 'header' | 'side';
 export type SideAvatarDisplayMode = 'every' | 'first' | 'last';
@@ -62,6 +63,7 @@ export interface AppearanceThemeSnapshot {
   inputBackgroundTransparent?: boolean;
   inputControlBackgroundColor?: string;
   inputStyle?: ChatInputAppearanceStyle;
+  modelButtonLabelMode?: ModelButtonLabelMode;
   inputBorderRadius?: number;
   inputIconUris?: Partial<Record<ChatInputIconKey, string>>;
   inputIconDarkUris?: Partial<Record<ChatInputIconKey, string>>;
@@ -797,6 +799,7 @@ const DEFAULT_APPEARANCE_CONFIG: AppearanceConfig = {
   inputIconUris: {},
   inputIconDarkUris: {},
   inputStyle: 'default',
+  modelButtonLabelMode: 'channel',
   inputBorderRadius: 20,
   customCss: '',
   appearanceThemes: [],
@@ -867,6 +870,7 @@ function snapshotAppearanceConfig(config?: AppearanceConfig): AppearanceThemeSna
     inputBackgroundTransparent: source.inputBackgroundTransparent,
     inputControlBackgroundColor: source.inputControlBackgroundColor,
     inputStyle: source.inputStyle === 'compact' ? 'compact' : 'default',
+    modelButtonLabelMode: source.modelButtonLabelMode === 'model' ? 'model' : 'channel',
     inputBorderRadius: source.inputBorderRadius,
     inputIconUris: { ...(source.inputIconUris || {}) },
     inputIconDarkUris: { ...(source.inputIconDarkUris || {}) },

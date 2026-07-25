@@ -39,7 +39,7 @@ const PROMPT_CACHE_TTL_OPTIONS: Array<{ value: PromptCacheTtl; label: string }> 
 const THINKING_COMPATIBILITY_OPTIONS: Array<{ value: ThinkingCompatibility; label: string }> = [
   { value: 'standard', label: '标准' },
   { value: 'openrouter', label: 'OpenRouter' },
-  { value: 'nanogpt', label: 'NanoGPT' },
+  { value: 'nanogpt', label: 'NanoGPT/CLIProxyAPI' },
 ];
 const THINKING_EFFORT_OPTIONS: Array<{ value: ThinkingEffort; label: string }> = [
   { value: 'low', label: 'low' },

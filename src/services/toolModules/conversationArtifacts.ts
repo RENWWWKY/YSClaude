@@ -35,7 +35,7 @@ const ARTIFACT_READ_TOOL: ToolDefinition = {
   },
 };
 
-const ARTIFACT_CREATE_TOOL: ToolDefinition = {
+export const LEGACY_ARTIFACT_CREATE_TOOL: ToolDefinition = {
   type: 'function',
   function: {
     name: 'artifact_create',
@@ -52,7 +52,7 @@ const ARTIFACT_CREATE_TOOL: ToolDefinition = {
   },
 };
 
-const ARTIFACT_REPLACE_TOOL: ToolDefinition = {
+export const LEGACY_ARTIFACT_REPLACE_TOOL: ToolDefinition = {
   type: 'function',
   function: {
     name: 'artifact_replace',
@@ -68,7 +68,7 @@ const ARTIFACT_REPLACE_TOOL: ToolDefinition = {
   },
 };
 
-const ARTIFACT_PATCH_TEXT_TOOL: ToolDefinition = {
+export const LEGACY_ARTIFACT_PATCH_TEXT_TOOL: ToolDefinition = {
   type: 'function',
   function: {
     name: 'artifact_patch_text',
@@ -82,6 +82,28 @@ const ARTIFACT_PATCH_TEXT_TOOL: ToolDefinition = {
         all: { type: 'boolean', description: '是否替换全部匹配。默认 false，只替换第一处' },
       },
       required: ['artifactId', 'find', 'replace'],
+    },
+  },
+};
+
+const ARTIFACT_WRITE_TOOL: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'artifact_write',
+    description: '创建或修改当前对话文件。action=create 时传 name、content 和可选 mimeType；action=replace 时传 artifactId、content；action=patch 时传 artifactId、find、replace 和可选 all。',
+    parameters: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['create', 'replace', 'patch'], description: '写入方式' },
+        artifactId: { type: 'string', description: 'replace/patch 时的文件 ID' },
+        name: { type: 'string', description: 'create 时的文件名' },
+        mimeType: { type: 'string', description: 'create 时可选的 MIME 类型' },
+        content: { type: 'string', description: 'create/replace 时的完整内容' },
+        find: { type: 'string', description: 'patch 时要查找的原文本' },
+        replace: { type: 'string', description: 'patch 时的替换文本' },
+        all: { type: 'boolean', description: 'patch 时是否替换全部匹配，默认 false' },
+      },
+      required: ['action'],
     },
   },
 };
@@ -119,9 +141,7 @@ const ARTIFACT_SHOW_CARD_TOOL: ToolDefinition = {
 const ARTIFACT_TOOLS = [
   ARTIFACT_LIST_TOOL,
   ARTIFACT_READ_TOOL,
-  ARTIFACT_CREATE_TOOL,
-  ARTIFACT_REPLACE_TOOL,
-  ARTIFACT_PATCH_TEXT_TOOL,
+  ARTIFACT_WRITE_TOOL,
   ARTIFACT_DELETE_TOOL,
   ARTIFACT_SHOW_CARD_TOOL,
 ];
@@ -131,9 +151,7 @@ export const conversationArtifactsTool: ToolModule = {
   labels: {
     artifact_list: '列出文件',
     artifact_read: '读取文件',
-    artifact_create: '创建文件',
-    artifact_replace: '替换文件',
-    artifact_patch_text: '修改文件',
+    artifact_write: '写入文件',
     artifact_delete: '删除文件',
     artifact_show_card: '显示文件卡片',
   },
@@ -144,12 +162,17 @@ export const conversationArtifactsTool: ToolModule = {
         return await executeArtifactList(context.conversationId);
       case 'artifact_read':
         return await executeArtifactRead(context.conversationId, args.artifactId);
-      case 'artifact_create':
-        return await executeArtifactCreate(context.conversationId, args.name, args.mimeType, args.content);
-      case 'artifact_replace':
-        return await executeArtifactReplace(context.conversationId, args.artifactId, args.content);
-      case 'artifact_patch_text':
-        return await executeArtifactPatchText(context.conversationId, args);
+      case 'artifact_write':
+        if (args.action === 'create') {
+          return await executeArtifactCreate(context.conversationId, args.name, args.mimeType, args.content);
+        }
+        if (args.action === 'replace') {
+          return await executeArtifactReplace(context.conversationId, args.artifactId, args.content);
+        }
+        if (args.action === 'patch') {
+          return await executeArtifactPatchText(context.conversationId, args);
+        }
+        throw new Error('action 必须是 create、replace 或 patch');
       case 'artifact_delete':
         return await executeArtifactDelete(context.conversationId, args.artifactId);
       case 'artifact_show_card':

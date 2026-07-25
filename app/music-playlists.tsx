@@ -70,7 +70,7 @@ export default function MusicPlaylistsScreen() {
   const currentTrack = music.tracks[music.currentIndex];
   const exitMusic = useCallback(() => {
     music.closePlayer().catch(() => undefined);
-    router.replace('/');
+    router.dismissTo('/');
   }, [music, router]);
   const store = useNeteaseStore();
   const {
@@ -178,7 +178,7 @@ export default function MusicPlaylistsScreen() {
       >
         <View style={styles.heroShade} />
         <View style={styles.topBar}>
-          <Pressable style={styles.topButton} onPress={() => router.replace('/')}>
+          <Pressable style={styles.topButton} onPress={exitMusic}>
             <ChevronLeft size={27} color="#fff" />
           </Pressable>
           <View style={styles.topActions}>

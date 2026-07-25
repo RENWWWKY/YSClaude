@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  BackHandler,
+  Easing,
   FlatList,
   Image,
   Modal,
@@ -143,6 +146,47 @@ export default function HistoryScreen() {
   const [favoritesLoading, setFavoritesLoading] = useState(false);
   const [importingChats, setImportingChats] = useState(false);
   const [previewLetter, setPreviewLetter] = useState<IncomingLetter | null>(null);
+  const [drawerMaskVisible, setDrawerMaskVisible] = useState(false);
+  const drawerTranslateX = useRef(new Animated.Value(-drawerWidth)).current;
+  const drawerClosingRef = useRef(false);
+
+  useEffect(() => {
+    drawerClosingRef.current = false;
+    setDrawerMaskVisible(false);
+    drawerTranslateX.setValue(-drawerWidth);
+    requestAnimationFrame(() => {
+      Animated.timing(drawerTranslateX, {
+        toValue: 0,
+        duration: 260,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished && !drawerClosingRef.current) setDrawerMaskVisible(true);
+      });
+    });
+  }, [drawerTranslateX, drawerWidth]);
+
+  const closeHistory = useCallback(() => {
+    if (drawerClosingRef.current) return;
+    drawerClosingRef.current = true;
+    setDrawerMaskVisible(false);
+    Animated.timing(drawerTranslateX, {
+      toValue: -drawerWidth,
+      duration: 220,
+      easing: Easing.in(Easing.cubic),
+      useNativeDriver: true,
+    }).start(() => router.back());
+  }, [drawerTranslateX, drawerWidth, router]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+        closeHistory();
+        return true;
+      });
+      return () => subscription.remove();
+    }, [closeHistory])
+  );
 
   const {
     conversationId,
@@ -273,24 +317,24 @@ export default function HistoryScreen() {
 
   async function handleOpen(conv: Conversation) {
     await loadConversation(conv.id);
-    router.back();
+    closeHistory();
   }
 
   async function handleOpenSearchResult(result: ChatSearchResult) {
     await loadConversationAroundMessage(result.conversationId, result.messageId);
-    router.back();
+    closeHistory();
   }
 
   async function handleOpenGalleryItem(item: GeneratedPictureGalleryItem) {
     setPreviewPicture(null);
     await loadConversationAroundMessage(item.conversationId, item.messageId);
-    router.back();
+    closeHistory();
   }
 
   async function handleOpenArtifactConversation(item: ConversationArtifactListItem) {
     setPreviewArtifact(null);
     await loadConversation(item.conversationId);
-    router.back();
+    closeHistory();
   }
 
   async function handlePreviewArtifact(item: ConversationArtifactListItem) {
@@ -347,7 +391,7 @@ export default function HistoryScreen() {
 
   function handleNewChat() {
     newConversation();
-    router.back();
+    closeHistory();
   }
 
   async function handleImportSillyTavern() {
@@ -1037,8 +1081,8 @@ export default function HistoryScreen() {
 
   return (
     <View style={styles.container}>
-      <Pressable style={styles.dimLayer} onPress={() => router.back()} />
-      <View style={styles.drawer}>
+      {drawerMaskVisible && <Pressable style={styles.dimLayer} onPress={closeHistory} />}
+      <Animated.View style={[styles.drawer, { transform: [{ translateX: drawerTranslateX }] }]}>
         {renderActiveSection()}
         {!!recentMenuConv && (
           <Pressable style={styles.recentMenuOverlay} onPress={() => setRecentMenuConv(null)}>
@@ -1075,7 +1119,7 @@ export default function HistoryScreen() {
           </View>
           </Pressable>
         )}
-      </View>
+      </Animated.View>
 
       <Modal visible={!!editingConv} transparent animationType="fade">
         <Pressable style={styles.overlay} onPress={() => setEditingConv(null)}>
@@ -1341,7 +1385,7 @@ const createStyles = (
   container: { flex: 1, backgroundColor: 'transparent' },
   dimLayer: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0, 0, 0, 0.28)',
+    backgroundColor: 'rgba(0, 0, 0, 0.16)',
   },
   drawer: {
     flex: 1,

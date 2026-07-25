@@ -193,7 +193,7 @@ export default function MusicHomeScreen() {
 
   const closeMusic = useCallback(() => {
     music.closePlayer().catch(() => undefined);
-    router.replace('/');
+    router.dismissTo('/');
   }, [music, router]);
 
   const showSearch = searching || searchResults.length > 0 || !!query.trim();
@@ -202,7 +202,7 @@ export default function MusicHomeScreen() {
     <MusicModuleGesture onExit={closeMusic}>
     <View style={[styles.page, { paddingTop: insets.top + 8 }]}>
       <View style={styles.header}>
-        <Pressable style={styles.headerButton} onPress={() => router.replace('/')}>
+        <Pressable style={styles.headerButton} onPress={closeMusic}>
           <ChevronLeft size={27} color="#121622" strokeWidth={2.2} />
         </Pressable>
         <View style={styles.searchBox}>

@@ -1726,6 +1726,8 @@ async function runToolLoop(
   const webCruiseEnabled = !!options?.webCruiseEnabled;
   const memoryEnabled = settings.memoryVaultConfig.enabled;
   const webEnabled = settings.webSearchConfig.enabled && !!settings.webSearchConfig.tavilyApiKey;
+  const hotboardEnabled =
+    !!settings.hotboardConfig?.enabled && !!settings.hotboardConfig.apiKey.trim();
   const webInteractionEnabled =
     webCruiseEnabled ||
     !!settings.webInteractionConfig?.enabled;
@@ -1755,7 +1757,7 @@ async function runToolLoop(
     conversationArtifacts: conversationArtifactToolsEnabled,
     conversationWindows: !!settings.conversationWindowToolConfig?.enabled,
     htmlArtifacts: htmlArtifactToolsEnabled,
-    hotboard: webCruiseEnabled,
+    hotboard: hotboardEnabled,
     runCommand: runCommandEnabled ? settings.runCommandConfig : undefined,
     nativeTools: {
       ...settings.nativeToolConfig,

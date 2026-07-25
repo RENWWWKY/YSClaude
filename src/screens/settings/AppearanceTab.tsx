@@ -10,6 +10,7 @@ import {
   type ChatInputAppearanceStyle,
   type ChatInputIconKey,
   type MessageAvatarLayout,
+  type ModelButtonLabelMode,
   type SideAvatarDisplayMode,
   useSettingsStore,
 } from '../../stores/settings';
@@ -181,6 +182,7 @@ export function AppearanceTab({ showToast, keyboardBottomInset }: AppearanceTabP
   const inputIconUris = appearanceConfig?.inputIconUris || {};
   const inputIconDarkUris = appearanceConfig?.inputIconDarkUris || {};
   const inputStyle = appearanceConfig?.inputStyle === 'compact' ? 'compact' : 'default';
+  const modelButtonLabelMode: ModelButtonLabelMode = appearanceConfig?.modelButtonLabelMode === 'model' ? 'model' : 'channel';
   const inputBorderRadius = appearanceConfig?.inputBorderRadius ?? 20;
   const inputBackgroundTransparent = !!appearanceConfig?.inputBackgroundTransparent;
   const userBubbleTransparent = !!appearanceConfig?.userBubbleTransparent;
@@ -1412,6 +1414,22 @@ export function AppearanceTab({ showToast, keyboardBottomInset }: AppearanceTabP
           >
             <Text style={[styles.segmentedText, inputStyle === styleKey && styles.segmentedTextActive]}>
               {styleKey === 'default' ? '默认原版' : '单行'}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <Text style={styles.label}>模型选择按键文字</Text>
+      <Text style={styles.hint}>选择输入框中的模型按键显示 API 渠道名称或实际模型名称。</Text>
+      <View style={styles.segmentedRow}>
+        {(['channel', 'model'] as ModelButtonLabelMode[]).map((mode) => (
+          <Pressable
+            key={mode}
+            style={[styles.segmentedButton, modelButtonLabelMode === mode && styles.segmentedButtonActive]}
+            onPress={() => setAppearanceConfig({ modelButtonLabelMode: mode })}
+          >
+            <Text style={[styles.segmentedText, modelButtonLabelMode === mode && styles.segmentedTextActive]}>
+              {mode === 'channel' ? '渠道名' : '模型名'}
             </Text>
           </Pressable>
         ))}

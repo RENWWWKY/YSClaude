@@ -75,7 +75,7 @@ const WEBVIEW_SCREENSHOT_TOOL: ToolDefinition = {
   },
 };
 
-const HTML_ARTIFACT_GET_SOURCE_TOOL: ToolDefinition = {
+export const LEGACY_HTML_ARTIFACT_GET_SOURCE_TOOL: ToolDefinition = {
   type: 'function',
   function: {
     name: 'html_artifact_get_source',
@@ -119,7 +119,7 @@ const HTML_ARTIFACT_OBSERVE_TOOL: ToolDefinition = {
   },
 };
 
-const HTML_ARTIFACT_CLICK_ELEMENT_TOOL: ToolDefinition = {
+export const LEGACY_HTML_ARTIFACT_CLICK_ELEMENT_TOOL: ToolDefinition = {
   type: 'function',
   function: {
     name: 'html_artifact_click_element',
@@ -134,7 +134,7 @@ const HTML_ARTIFACT_CLICK_ELEMENT_TOOL: ToolDefinition = {
   },
 };
 
-const HTML_ARTIFACT_CLICK_SELECTOR_TOOL: ToolDefinition = {
+export const LEGACY_HTML_ARTIFACT_CLICK_SELECTOR_TOOL: ToolDefinition = {
   type: 'function',
   function: {
     name: 'html_artifact_click_selector',
@@ -149,7 +149,7 @@ const HTML_ARTIFACT_CLICK_SELECTOR_TOOL: ToolDefinition = {
   },
 };
 
-const HTML_ARTIFACT_TAP_TOOL: ToolDefinition = {
+export const LEGACY_HTML_ARTIFACT_TAP_TOOL: ToolDefinition = {
   type: 'function',
   function: {
     name: 'html_artifact_tap',
@@ -165,7 +165,7 @@ const HTML_ARTIFACT_TAP_TOOL: ToolDefinition = {
   },
 };
 
-const HTML_ARTIFACT_WAIT_TOOL: ToolDefinition = {
+export const LEGACY_HTML_ARTIFACT_WAIT_TOOL: ToolDefinition = {
   type: 'function',
   function: {
     name: 'html_artifact_wait',
@@ -194,7 +194,7 @@ const HTML_ARTIFACT_SCREENSHOT_TOOL: ToolDefinition = {
   },
 };
 
-const HTML_ARTIFACT_REPLACE_SOURCE_TOOL: ToolDefinition = {
+export const LEGACY_HTML_ARTIFACT_REPLACE_SOURCE_TOOL: ToolDefinition = {
   type: 'function',
   function: {
     name: 'html_artifact_replace_source',
@@ -213,7 +213,7 @@ const HTML_ARTIFACT_REPLACE_SOURCE_TOOL: ToolDefinition = {
   },
 };
 
-const HTML_ARTIFACT_PATCH_ELEMENT_TOOL: ToolDefinition = {
+export const LEGACY_HTML_ARTIFACT_PATCH_ELEMENT_TOOL: ToolDefinition = {
   type: 'function',
   function: {
     name: 'html_artifact_patch_element',
@@ -248,7 +248,7 @@ const HTML_ARTIFACT_PATCH_ELEMENT_TOOL: ToolDefinition = {
   },
 };
 
-const HTML_ARTIFACT_SAVE_TOOL: ToolDefinition = {
+export const LEGACY_HTML_ARTIFACT_SAVE_TOOL: ToolDefinition = {
   type: 'function',
   function: {
     name: 'html_artifact_save',
@@ -262,6 +262,46 @@ const HTML_ARTIFACT_SAVE_TOOL: ToolDefinition = {
   },
 };
 
+const HTML_ARTIFACT_INTERACT_TOOL: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'html_artifact_interact',
+    description: '与当前 HTML 预览交互。可按观察结果中的元素 index、CSS selector 或坐标点击，也可等待页面更新；每次操作后返回最新观察结果。',
+    parameters: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['click_index', 'click_selector', 'tap', 'wait'] },
+        index: { type: 'number', description: 'click_index 使用的元素 index' },
+        selector: { type: 'string', description: 'click_selector 使用的 CSS selector' },
+        x: { type: 'number', description: 'tap 使用的 x 坐标' },
+        y: { type: 'number', description: 'tap 使用的 y 坐标' },
+        ms: { type: 'number', description: 'wait 使用的毫秒数，200 到 10000' },
+      },
+      required: ['action'],
+    },
+  },
+};
+
+export const LEGACY_HTML_ARTIFACT_EDIT_TOOL: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'html_artifact_edit',
+    description: '修改当前 HTML 预览。action=replace_source 时传完整 html；action=patch_element 时传 selector，并可传 text、html、style 或 attributes。修改后需调用 html_artifact_save 才会永久保存。',
+    parameters: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['replace_source', 'patch_element'] },
+        selector: { type: 'string', description: 'patch_element 的 CSS selector' },
+        text: { type: 'string', description: '替换元素 textContent' },
+        html: { type: 'string', description: 'replace_source 的完整源码，或 patch_element 的 innerHTML' },
+        style: { type: 'object', description: '要设置的 CSS style 键值' },
+        attributes: { type: 'object', description: '要设置的 HTML attribute 键值' },
+      },
+      required: ['action'],
+    },
+  },
+};
+
 const WEBVIEW_TOOLS = [
   WEBVIEW_OPEN_TOOL,
   WEBVIEW_EVAL_JS_TOOL,
@@ -271,15 +311,8 @@ const WEBVIEW_TOOLS = [
 const HTML_ARTIFACT_TOOLS = [
   HTML_ARTIFACT_OPEN_TOOL,
   HTML_ARTIFACT_OBSERVE_TOOL,
-  HTML_ARTIFACT_CLICK_ELEMENT_TOOL,
-  HTML_ARTIFACT_CLICK_SELECTOR_TOOL,
-  HTML_ARTIFACT_TAP_TOOL,
-  HTML_ARTIFACT_WAIT_TOOL,
+  HTML_ARTIFACT_INTERACT_TOOL,
   HTML_ARTIFACT_SCREENSHOT_TOOL,
-  HTML_ARTIFACT_GET_SOURCE_TOOL,
-  HTML_ARTIFACT_REPLACE_SOURCE_TOOL,
-  HTML_ARTIFACT_PATCH_ELEMENT_TOOL,
-  HTML_ARTIFACT_SAVE_TOOL,
 ];
 
 export const webViewTool: ToolModule = {
@@ -288,17 +321,10 @@ export const webViewTool: ToolModule = {
     webview_open: '打开网页',
     webview_eval_js: '执行网页 JS',
     webview_screenshot: '网页截图',
-    html_artifact_get_source: '读取 HTML',
     html_artifact_open: '打开 HTML',
     html_artifact_observe: '观察 HTML',
-    html_artifact_click_element: '点击 HTML 元素',
-    html_artifact_click_selector: '点击 HTML 选择器',
-    html_artifact_tap: '点击 HTML 坐标',
-    html_artifact_wait: '等待 HTML',
+    html_artifact_interact: '操作 HTML',
     html_artifact_screenshot: 'HTML 截图',
-    html_artifact_replace_source: '替换 HTML',
-    html_artifact_patch_element: '修改 HTML 元素',
-    html_artifact_save: '保存 HTML',
   },
   getDefinitions: (config) => [
     ...(config.webInteraction ? WEBVIEW_TOOLS : []),
@@ -317,28 +343,18 @@ export const webViewTool: ToolModule = {
         return await executeWebViewEvalJs(args.script, context.webInteractionConfig);
       case 'webview_screenshot':
         return await executeWebViewScreenshot(context.webInteractionConfig);
-      case 'html_artifact_get_source':
-        return await executeHtmlArtifactGetSource(context.htmlArtifactToolConfig);
       case 'html_artifact_open':
         return await executeHtmlArtifactOpen(context.conversationId, args.artifactId, context.htmlArtifactToolConfig);
       case 'html_artifact_observe':
         return await executeHtmlArtifactObserve(context.htmlArtifactToolConfig);
-      case 'html_artifact_click_element':
-        return await executeHtmlArtifactClickElement(args.index, context.htmlArtifactToolConfig);
-      case 'html_artifact_click_selector':
-        return await executeHtmlArtifactClickSelector(args.selector, context.htmlArtifactToolConfig);
-      case 'html_artifact_tap':
-        return await executeHtmlArtifactTap(args.x, args.y, context.htmlArtifactToolConfig);
-      case 'html_artifact_wait':
-        return await executeHtmlArtifactWait(args.ms, context.htmlArtifactToolConfig);
+      case 'html_artifact_interact':
+        if (args.action === 'click_index') return await executeHtmlArtifactClickElement(args.index, context.htmlArtifactToolConfig);
+        if (args.action === 'click_selector') return await executeHtmlArtifactClickSelector(args.selector, context.htmlArtifactToolConfig);
+        if (args.action === 'tap') return await executeHtmlArtifactTap(args.x, args.y, context.htmlArtifactToolConfig);
+        if (args.action === 'wait') return await executeHtmlArtifactWait(args.ms, context.htmlArtifactToolConfig);
+        throw new Error('action 必须是 click_index、click_selector、tap 或 wait');
       case 'html_artifact_screenshot':
         return await executeHtmlArtifactScreenshot(context.htmlArtifactToolConfig);
-      case 'html_artifact_replace_source':
-        return await executeHtmlArtifactReplaceSource(args.html, context.htmlArtifactToolConfig);
-      case 'html_artifact_patch_element':
-        return await executeHtmlArtifactPatchElement(args, context.htmlArtifactToolConfig);
-      case 'html_artifact_save':
-        return await executeHtmlArtifactSave(context.htmlArtifactToolConfig);
       default:
         return undefined;
     }
@@ -508,7 +524,7 @@ async function executeHtmlArtifactScreenshot(config: { enabled?: boolean }): Pro
   };
 }
 
-async function executeHtmlArtifactGetSource(config: { enabled?: boolean }): Promise<string> {
+export async function executeHtmlArtifactGetSource(config: { enabled?: boolean }): Promise<string> {
   ensureHtmlArtifactToolsEnabled(config);
   const source = await getHtmlArtifactSource();
   const target = source.info.artifactId
@@ -522,7 +538,7 @@ async function executeHtmlArtifactGetSource(config: { enabled?: boolean }): Prom
   ].join('\n');
 }
 
-async function executeHtmlArtifactReplaceSource(rawHtml: unknown, config: { enabled?: boolean }): Promise<string> {
+export async function executeHtmlArtifactReplaceSource(rawHtml: unknown, config: { enabled?: boolean }): Promise<string> {
   ensureHtmlArtifactToolsEnabled(config);
   if (typeof rawHtml !== 'string' || !rawHtml.trim()) {
     throw new Error('缺少有效 HTML');
@@ -537,7 +553,7 @@ async function executeHtmlArtifactReplaceSource(rawHtml: unknown, config: { enab
   ].join('\n');
 }
 
-async function executeHtmlArtifactPatchElement(
+export async function executeHtmlArtifactPatchElement(
   args: Record<string, any>,
   config: { enabled?: boolean }
 ): Promise<string> {
@@ -560,7 +576,7 @@ async function executeHtmlArtifactPatchElement(
   ].join('\n');
 }
 
-async function executeHtmlArtifactSave(config: { enabled?: boolean }): Promise<string> {
+export async function executeHtmlArtifactSave(config: { enabled?: boolean }): Promise<string> {
   ensureHtmlArtifactToolsEnabled(config);
   const result = await saveHtmlArtifact();
   if (result.artifactId) {
