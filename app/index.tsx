@@ -548,6 +548,7 @@ export default function ChatScreen() {
   const suppressNextContentAutoScrollRef = useRef(false);
   const suppressEndReachedUntilRef = useRef(0);
   const olderMessagesAutoLoadRef = useRef(false);
+  const newerMessagesEndReachedArmedRef = useRef(false);
   const messageIdsRef = useRef<string[]>([]);
   const conversationIdRef = useRef<string | null>(null);
   const pendingScrollMessageIdRef = useRef<string | null>(null);
@@ -1472,9 +1473,21 @@ export default function ChatScreen() {
   }, [hasNewerMessages, renderNewerMessagesFooter, showRemoteInboxLoading]);
 
   const handleEndReached = useCallback(() => {
-    if (!hasNewerMessages || isLoadingNewerMessages) return;
+    if (
+      !newerMessagesEndReachedArmedRef.current ||
+      !hasNewerMessages ||
+      isLoadingNewerMessages
+    ) return;
+    // Appending a page can leave the list inside onEndReachedThreshold, which
+    // makes FlatList immediately request every remaining page. Consume the
+    // current drag here; a new user drag is required before loading again.
+    newerMessagesEndReachedArmedRef.current = false;
     void handleLoadNewerMessages();
   }, [handleLoadNewerMessages, hasNewerMessages, isLoadingNewerMessages]);
+
+  const handleMessageListScrollBeginDrag = useCallback(() => {
+    newerMessagesEndReachedArmedRef.current = true;
+  }, []);
 
   const messageListNode = (
     <FlatList
@@ -1488,6 +1501,7 @@ export default function ChatScreen() {
       onLayout={handleListLayout}
       onContentSizeChange={handleContentSizeChange}
       onScroll={handleScroll}
+      onScrollBeginDrag={handleMessageListScrollBeginDrag}
       onViewableItemsChanged={handleViewableMessagesChanged}
       viewabilityConfig={messageViewabilityConfig}
       scrollEventThrottle={16}
