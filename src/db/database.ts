@@ -905,6 +905,43 @@ async function runMigrations(database: SQLite.SQLiteDatabase) {
   } else if (version < 32) {
     await database.execAsync('PRAGMA user_version = 32;');
   }
+  if (version < 33) {
+    await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS agent_runs (
+        id TEXT PRIMARY KEY,
+        parent_run_id TEXT,
+        conversation_id TEXT,
+        parent_message_id TEXT,
+        profile_id TEXT NOT NULL,
+        profile_snapshot TEXT NOT NULL,
+        task TEXT NOT NULL,
+        status TEXT NOT NULL,
+        final_output TEXT,
+        error TEXT,
+        depth INTEGER NOT NULL DEFAULT 1,
+        tool_call_count INTEGER NOT NULL DEFAULT 0,
+        total_tokens INTEGER NOT NULL DEFAULT 0,
+        started_at INTEGER NOT NULL,
+        finished_at INTEGER
+      );
+      CREATE TABLE IF NOT EXISTS agent_run_events (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL,
+        sequence INTEGER NOT NULL,
+        type TEXT NOT NULL,
+        content TEXT,
+        tool_call_id TEXT,
+        tool_name TEXT,
+        tool_args TEXT,
+        tool_result TEXT,
+        created_at INTEGER NOT NULL,
+        FOREIGN KEY (run_id) REFERENCES agent_runs(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_agent_runs_conversation ON agent_runs(conversation_id, started_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_agent_run_events_run ON agent_run_events(run_id, sequence);
+      PRAGMA user_version = 33;
+    `);
+  }
 }
 
 async function hasColumn(

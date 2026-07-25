@@ -483,6 +483,48 @@ export interface ToolResultCompressionConfig {
   maxOutputTokens: number;
 }
 
+export interface SubAgentProfile {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  apiConfigName: string;
+  model: string;
+  systemPrompt: string;
+  allowedToolNames: string[];
+  maxToolCalls: number;
+  maxOutputTokens: number;
+  maxRuntimeMs: number;
+  maxNestingDepth: number;
+}
+
+export interface SubAgentConfig {
+  enabled: boolean;
+  profiles: SubAgentProfile[];
+}
+
+function normalizeSubAgentConfig(config?: Partial<SubAgentConfig>): SubAgentConfig {
+  return {
+    enabled: config?.enabled ?? false,
+    profiles: Array.isArray(config?.profiles) ? config.profiles.map((profile, index) => ({
+      id: profile.id || `sub-agent-${index + 1}`,
+      name: profile.name || `子 Agent ${index + 1}`,
+      description: profile.description || '',
+      enabled: profile.enabled !== false,
+      apiConfigName: profile.apiConfigName || '',
+      model: profile.model || '',
+      systemPrompt: profile.systemPrompt || '你是一个专注执行委派任务的子 Agent。完成任务后返回准确、精炼的结果。',
+      allowedToolNames: Array.isArray(profile.allowedToolNames)
+        ? [...new Set(profile.allowedToolNames.map((name) => name.trim()).filter(Boolean))]
+        : [],
+      maxToolCalls: Math.max(1, Math.min(100, profile.maxToolCalls || 12)),
+      maxOutputTokens: Math.max(64, profile.maxOutputTokens || 2000),
+      maxRuntimeMs: Math.max(1000, profile.maxRuntimeMs || 120000),
+      maxNestingDepth: Math.max(0, Math.min(3, profile.maxNestingDepth || 0)),
+    })) : [],
+  };
+}
+
 export const DEFAULT_TOOL_RESULT_COMPRESSION_PROMPT = `请压缩下面的工具执行结果，供 Agent 在后续对话中继续工作。
 必须保留关键事实、标识符、路径、URL、错误、数值、已执行变更和后续操作所需信息。
 删除重复内容、无关日志和冗长格式。不要虚构信息，只输出压缩结果。`;
@@ -958,6 +1000,7 @@ interface SettingsState {
   periodConfig: PeriodConfig;
   promptCacheConfig: PromptCacheConfig;
   toolResultCompressionConfig: ToolResultCompressionConfig;
+  subAgentConfig: SubAgentConfig;
   imageGenerationConfig: ImageGenerationConfig;
   imageGenerationPrompt: string;
   incomingLetterConfig: IncomingLetterConfig;
@@ -1006,6 +1049,7 @@ interface SettingsState {
   setPeriodConfig: (config: Partial<PeriodConfig>) => void;
   setPromptCacheConfig: (config: Partial<PromptCacheConfig>) => void;
   setToolResultCompressionConfig: (config: Partial<ToolResultCompressionConfig>) => void;
+  setSubAgentConfig: (config: Partial<SubAgentConfig>) => void;
   setImageGenerationConfig: (config: Partial<ImageGenerationConfig>) => void;
   setImageGenerationPrompt: (prompt: string) => void;
   setIncomingLetterConfig: (config: Partial<IncomingLetterConfig>) => void;
@@ -1296,6 +1340,7 @@ export const useSettingsStore = create<SettingsState>()(
         dingTalkAtMobiles: '',
       },
       toolResultCompressionConfig: normalizeToolResultCompressionConfig(),
+      subAgentConfig: normalizeSubAgentConfig(),
       imageGenerationConfig: {
         enabled: false,
         baseUrl: '',
@@ -1613,6 +1658,13 @@ export const useSettingsStore = create<SettingsState>()(
             ...config,
           }),
         })),
+      setSubAgentConfig: (config) =>
+        set((state) => ({
+          subAgentConfig: normalizeSubAgentConfig({
+            ...state.subAgentConfig,
+            ...config,
+          }),
+        })),
       setDynamicIslandConfig: (config) =>
         set((state) => ({
           dynamicIslandConfig: {
@@ -1804,6 +1856,7 @@ export const useSettingsStore = create<SettingsState>()(
           liveKitVoiceCallConfig: { ...currentState.liveKitVoiceCallConfig, ...saved.liveKitVoiceCallConfig },
           memoryVaultConfig: { ...currentState.memoryVaultConfig, ...saved.memoryVaultConfig },
           systemPromptBlocks: migratedBlocks,
+          subAgentConfig: normalizeSubAgentConfig(saved.subAgentConfig),
         };
       },
       partialize: (state) => ({
@@ -1846,6 +1899,7 @@ export const useSettingsStore = create<SettingsState>()(
         periodConfig: state.periodConfig,
         promptCacheConfig: state.promptCacheConfig,
         toolResultCompressionConfig: state.toolResultCompressionConfig,
+        subAgentConfig: state.subAgentConfig,
         imageGenerationConfig: state.imageGenerationConfig,
         imageGenerationPrompt: state.imageGenerationPrompt,
         incomingLetterConfig: state.incomingLetterConfig,
@@ -1874,6 +1928,7 @@ export const useSettingsStore = create<SettingsState>()(
           todayWidgetConfig: normalizeTodayWidgetConfig(state?.todayWidgetConfig),
           promptCacheConfig: normalizePromptCacheConfig(state?.promptCacheConfig),
           toolResultCompressionConfig: normalizeToolResultCompressionConfig(state?.toolResultCompressionConfig),
+          subAgentConfig: normalizeSubAgentConfig(state?.subAgentConfig),
           ttsConfig: normalizeTTSConfig(state?.ttsConfig),
           sttConfig: normalizeSTTConfig(state?.sttConfig),
           voiceCallTTSProvider: state?.voiceCallTTSProvider || state?.ttsConfig?.provider || 'minimax',

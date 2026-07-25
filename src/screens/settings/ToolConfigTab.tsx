@@ -89,6 +89,7 @@ export function ToolConfigTab({ showToast, keyboardBottomInset }: SettingsTabPro
     locationShareConfig,
     mcpToolConfig,
     toolResultCompressionConfig,
+    subAgentConfig,
     setMemoryVaultConfig,
     setWebSearchConfig,
     setWebInteractionConfig,
@@ -106,8 +107,29 @@ export function ToolConfigTab({ showToast, keyboardBottomInset }: SettingsTabPro
     setLocationShareConfig,
     setMcpToolConfig,
     setToolResultCompressionConfig,
+    setSubAgentConfig,
   } = useSettingsStore();
   const activeApiConfig = apiConfigs[activeConfigIndex] || null;
+  const updateSubAgent = (id: string, patch: Partial<(typeof subAgentConfig.profiles)[number]>) => {
+    setSubAgentConfig({ profiles: subAgentConfig.profiles.map((profile) => profile.id === id ? { ...profile, ...patch } : profile) });
+  };
+  const addSubAgent = () => {
+    const id = randomUUID();
+    setSubAgentConfig({ profiles: [...subAgentConfig.profiles, {
+      id,
+      name: `子 Agent ${subAgentConfig.profiles.length + 1}`,
+      description: '',
+      enabled: true,
+      apiConfigName: activeApiConfig?.name || '',
+      model: activeApiConfig?.model || '',
+      systemPrompt: '你是一个专注执行委派任务的子 Agent。完成任务后返回准确、精炼的结果。',
+      allowedToolNames: [],
+      maxToolCalls: 12,
+      maxOutputTokens: 2000,
+      maxRuntimeMs: 120000,
+      maxNestingDepth: 0,
+    }] });
+  };
   const [localQqEnabled, setLocalQqEnabled] = useState(!!qqBotToolConfig?.enabled);
   const [localQqAppId, setLocalQqAppId] = useState(qqBotToolConfig?.appId || '');
   const [localQqSecret, setLocalQqSecret] = useState(qqBotToolConfig?.appSecret || '');
@@ -2854,6 +2876,33 @@ export function ToolConfigTab({ showToast, keyboardBottomInset }: SettingsTabPro
         />}
         {toolSettingsPage === 'context' && (
           <View style={{ paddingHorizontal: 20, paddingTop: 18, gap: 14 }}>
+            <View style={styles.switchRow}>
+              <View style={styles.switchText}>
+                <Text style={styles.label}>启用子 Agent</Text>
+                <Text style={styles.hint}>主 Agent 可把独立任务派发给下方已启用的 Agent。</Text>
+              </View>
+              <Switch value={subAgentConfig.enabled} onValueChange={(enabled) => setSubAgentConfig({ enabled })} trackColor={{ false: colors.inputBorder, true: colors.primary }} />
+            </View>
+            {subAgentConfig.profiles.map((profile) => (
+              <View key={profile.id} style={{ gap: 10, padding: 12, borderWidth: 1, borderColor: colors.inputBorder, borderRadius: 12 }}>
+                <View style={styles.switchRow}>
+                  <View style={styles.switchText}><Text style={styles.label}>{profile.name}</Text><Text style={styles.hint}>ID: {profile.id}</Text></View>
+                  <Switch value={profile.enabled} onValueChange={(enabled) => updateSubAgent(profile.id, { enabled })} trackColor={{ false: colors.inputBorder, true: colors.primary }} />
+                </View>
+                <View style={styles.field}><Text style={styles.label}>名称</Text><TextInput style={styles.input} value={profile.name} onChangeText={(name) => updateSubAgent(profile.id, { name })} placeholder="代码审查 Agent" placeholderTextColor={colors.textTertiary} /></View>
+                <View style={styles.field}><Text style={styles.label}>用途说明</Text><TextInput style={styles.input} value={profile.description} onChangeText={(description) => updateSubAgent(profile.id, { description })} placeholder="告诉主 Agent 何时应派发给它" placeholderTextColor={colors.textTertiary} /></View>
+                <View style={styles.field}><Text style={styles.label}>API 配置名称</Text><Text style={styles.hint}>引用聊天 API 设置中已保存的配置：{apiConfigs.map((item) => item.name).join('、') || '暂无'}</Text><TextInput style={styles.input} value={profile.apiConfigName} onChangeText={(apiConfigName) => updateSubAgent(profile.id, { apiConfigName })} placeholder="API 配置名称" placeholderTextColor={colors.textTertiary} autoCapitalize="none" /></View>
+                <View style={styles.field}><Text style={styles.label}>模型</Text><Text style={styles.hint}>留空则使用所选 API 配置的模型。</Text><TextInput style={styles.input} value={profile.model} onChangeText={(model) => updateSubAgent(profile.id, { model })} placeholder="留空使用 API 默认模型" placeholderTextColor={colors.textTertiary} autoCapitalize="none" /></View>
+                <View style={styles.field}><Text style={styles.label}>系统提示词</Text><TextInput style={[styles.input, styles.multilineInput]} value={profile.systemPrompt} onChangeText={(systemPrompt) => updateSubAgent(profile.id, { systemPrompt })} multiline textAlignVertical="top" placeholder="子 Agent 的职责和约束" placeholderTextColor={colors.textTertiary} /></View>
+                <View style={styles.field}><Text style={styles.label}>允许使用的工具</Text><Text style={styles.hint}>每行一个工具名；留空表示该子 Agent不能使用普通工具。</Text><TextInput style={[styles.input, styles.multilineInput]} value={profile.allowedToolNames.join('\n')} onChangeText={(value) => updateSubAgent(profile.id, { allowedToolNames: value.split(/[\n,]/).map((name) => name.trim()).filter(Boolean) })} multiline autoCapitalize="none" placeholder={'web_search\nrun_command'} placeholderTextColor={colors.textTertiary} /></View>
+                <View style={styles.field}><Text style={styles.label}>最大工具调用次数</Text><TextInput style={styles.input} value={String(profile.maxToolCalls)} onChangeText={(value) => updateSubAgent(profile.id, { maxToolCalls: Math.max(1, parseInt(value, 10) || 1) })} keyboardType="number-pad" /></View>
+                <View style={styles.field}><Text style={styles.label}>最大输出 tokens</Text><TextInput style={styles.input} value={String(profile.maxOutputTokens)} onChangeText={(value) => updateSubAgent(profile.id, { maxOutputTokens: Math.max(64, parseInt(value, 10) || 64) })} keyboardType="number-pad" /></View>
+                <View style={styles.field}><Text style={styles.label}>超时（秒）</Text><TextInput style={styles.input} value={String(Math.round(profile.maxRuntimeMs / 1000))} onChangeText={(value) => updateSubAgent(profile.id, { maxRuntimeMs: Math.max(1, parseInt(value, 10) || 1) * 1000 })} keyboardType="number-pad" /></View>
+                <View style={styles.field}><Text style={styles.label}>最大嵌套深度（0–3）</Text><Text style={styles.hint}>0 表示不能继续派发；1 表示允许再派发一层。</Text><TextInput style={styles.input} value={String(profile.maxNestingDepth)} onChangeText={(value) => updateSubAgent(profile.id, { maxNestingDepth: Math.max(0, Math.min(3, parseInt(value, 10) || 0)) })} keyboardType="number-pad" /></View>
+                <Pressable style={styles.platformActionButton} onPress={() => setSubAgentConfig({ profiles: subAgentConfig.profiles.filter((item) => item.id !== profile.id) })}><Text style={styles.platformActionText}>删除此子 Agent</Text></Pressable>
+              </View>
+            ))}
+            <Pressable style={styles.platformActionButton} onPress={addSubAgent}><Text style={styles.platformActionText}>＋ 添加子 Agent</Text></Pressable>
             <View style={styles.switchRow}>
               <View style={styles.switchText}>
                 <Text style={styles.label}>自动压缩工具结果</Text>

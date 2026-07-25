@@ -1830,6 +1830,7 @@ async function runToolLoop(
     qqBotTools: !!settings.qqBotToolConfig?.enabled,
     wechatClawBotTools: !!settings.wechatClawBotToolConfig?.enabled,
     discordBotTools: !!settings.discordBotToolConfig?.enabled,
+    subAgents: !!settings.subAgentConfig?.enabled && settings.subAgentConfig.profiles.some((profile) => profile.enabled),
   });
   if (options?.allowedToolNames) {
     const allowed = new Set(options.allowedToolNames);
@@ -1972,6 +1973,8 @@ async function runToolLoop(
         wechatClawBotToolConfig: settings.wechatClawBotToolConfig,
         discordBotToolConfig: settings.discordBotToolConfig,
         webCruiseEnabled,
+        subAgentDepth: 0,
+        abortSignal: signal,
       });
       const resultText = getToolResultText(result);
       const displayResult = getToolResultDisplayContent(result);

@@ -43,6 +43,7 @@ export interface ToolDefinitionConfig {
   qqBotTools?: boolean;
   wechatClawBotTools?: boolean;
   discordBotTools?: boolean;
+  subAgents?: boolean;
 }
 
 export interface ToolExecutionContext {
@@ -62,6 +63,10 @@ export interface ToolExecutionContext {
   wechatClawBotToolConfig?: WechatClawBotToolConfig;
   discordBotToolConfig?: DiscordBotToolConfig;
   webCruiseEnabled?: boolean;
+  subAgentRunId?: string;
+  subAgentDepth?: number;
+  subAgentRemainingDepth?: number;
+  abortSignal?: AbortSignal;
 }
 
 export type ToolExecutionResult =

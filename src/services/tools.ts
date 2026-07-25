@@ -15,6 +15,7 @@ import { botMessagingTool } from './toolModules/botMessaging';
 import { discordBotTool } from './toolModules/discordBot';
 import { messageReactionTool } from './toolModules/messageReaction';
 import { askUserTool } from './toolModules/askUser';
+import { subAgentTool } from './toolModules/subAgent';
 import {
   ToolDefinition,
   ToolDefinitionConfig,
@@ -28,6 +29,7 @@ export { uploadDiary };
 
 const TOOL_MODULES: ToolModule[] = [
   askUserTool,
+  subAgentTool,
   messageReactionTool,
   conversationWindowsTool,
   accountingTool,
