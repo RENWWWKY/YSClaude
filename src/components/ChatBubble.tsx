@@ -2097,13 +2097,13 @@ export const ChatBubble = React.memo(function ChatBubble({
         animationType="none"
         onRequestClose={closeSummary}
       >
-        <Pressable
-          style={[styles.summaryOverlay, summaryMaskVisible && styles.summaryOverlayVisible]}
-          onPress={closeSummary}
-        >
+        <View style={styles.summaryOverlay}>
+          <Pressable
+            style={[styles.summaryBackdrop, summaryMaskVisible && styles.summaryOverlayVisible]}
+            onPress={closeSummary}
+          />
           <Animated.View
             style={[styles.summarySheet, { transform: [{ translateY: summaryTranslateY }] }]}
-            onStartShouldSetResponder={() => true}
           >
             <View style={styles.summaryHandle} />
             <View style={styles.summaryHeader}>
@@ -2127,6 +2127,8 @@ export const ChatBubble = React.memo(function ChatBubble({
                 style={styles.summaryBody}
                 contentContainerStyle={styles.summaryDetailContent}
                 showsVerticalScrollIndicator
+                nestedScrollEnabled
+                keyboardShouldPersistTaps="handled"
               >
                 {summaryDetail.type === 'thinking' ? (
                   <Markdown style={markdownStyles} rules={markdownRules} markdownit={latexMarkdownIt}>
@@ -2142,7 +2144,13 @@ export const ChatBubble = React.memo(function ChatBubble({
                 )}
               </ScrollView>
             ) : (
-              <ScrollView style={styles.summaryBody} contentContainerStyle={styles.summaryList}>
+              <ScrollView
+                style={styles.summaryBody}
+                contentContainerStyle={styles.summaryList}
+                showsVerticalScrollIndicator
+                nestedScrollEnabled
+                keyboardShouldPersistTaps="handled"
+              >
                 {thinkingParts.map((part, index) => (
                   <Pressable
                     key={`thinking-${index}`}
@@ -2170,7 +2178,7 @@ export const ChatBubble = React.memo(function ChatBubble({
               </ScrollView>
             )}
           </Animated.View>
-        </Pressable>
+        </View>
       </Modal>
       <Modal
         transparent
@@ -3190,6 +3198,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   summaryOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
+  },
+  summaryBackdrop: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     backgroundColor: 'transparent',
   },
   summaryOverlayVisible: {
@@ -3234,6 +3249,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flex: 1,
     marginHorizontal: 8,
     color: colors.text,
+    fontFamily: fonts.bold,
     fontSize: 22,
     lineHeight: 29,
     fontWeight: '700',
