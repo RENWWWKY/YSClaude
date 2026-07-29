@@ -26,5 +26,6 @@
 ## 回归准入
 
 - P0 用例必须全部通过；P1 不得存在未评估的阻塞性缺陷。
-- 提交前运行 `npm run typecheck` 与 `npm test`。
+- 提交前运行 `npm run typecheck` 与 `npm run test:coverage`。
+- 当前纯函数测试模块覆盖率门槛：行/函数/语句不低于 85%，分支不低于 80%。
 - 修复协议、Agent Loop 或数据库相关缺陷时，必须增加对应自动化用例或记录无法自动化的原因。

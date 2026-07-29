@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   consumeSseBuffer,
+  createEmptyToolCall,
   expandConcatenatedToolNames,
   mergeToolName,
   resolveToolCallIndex,
+  splitKnownToolNames,
   type ParsedToolCall,
 } from '../sseParser';
 
@@ -57,6 +59,17 @@ describe('tool call delta compatibility', () => {
     expect(resolveToolCallIndex(calls, { id: 'call_b' }, 0, 1, 0)).toBe(1);
   });
 
+  it('uses an explicit empty index and isolates a conflicting id', () => {
+    const calls = [call('call_a', 'search')];
+    expect(resolveToolCallIndex(calls, { index: 1, id: 'call_b' }, 0, 1, 0)).toBe(1);
+    expect(resolveToolCallIndex(calls, { index: 0, id: 'call_b' }, 0, 1, 0)).toBe(1);
+  });
+
+  it('uses batch position when gateways omit both index and id', () => {
+    const calls = [createEmptyToolCall(), createEmptyToolCall()];
+    expect(resolveToolCallIndex(calls, {}, 1, 2, 0)).toBe(1);
+  });
+
   it('splits concatenated known tool names and keeps arguments on the final call', () => {
     const expanded = expandConcatenatedToolNames(
       [call('call_a', 'searchcalendar', '{"date":"tomorrow"}')],
@@ -66,5 +79,14 @@ describe('tool call delta compatibility', () => {
     expect(expanded.map((item) => item.function.name)).toEqual(['search', 'calendar']);
     expect(expanded[0].function.arguments).toBe('{}');
     expect(expanded[1].function.arguments).toBe('{"date":"tomorrow"}');
+  });
+
+  it('keeps unknown names intact and generates an id for id-less calls', () => {
+    expect(splitKnownToolNames('unknown_tool', new Set(['search']))).toEqual(['unknown_tool']);
+    const expanded = expandConcatenatedToolNames(
+      [call('', 'unknown_tool', '{}')],
+      new Set(['search'])
+    );
+    expect(expanded).toEqual([call('call_0', 'unknown_tool', '{}')]);
   });
 });

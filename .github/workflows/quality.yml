@@ -25,5 +25,5 @@ jobs:
       - name: TypeScript typecheck
         run: npm run typecheck
 
-      - name: Unit tests
-        run: npm test
+      - name: Unit tests and coverage
+        run: npm run test:coverage

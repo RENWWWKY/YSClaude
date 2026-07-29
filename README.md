@@ -19,9 +19,10 @@ YSClaude 是一个 Android 优先的个人 AI Agent 工作台。它以对话为�
 ```bash
 npm run typecheck
 npm test
+npm run test:coverage
 ```
 
-当前自动化用例覆盖 SSE 不完整分片、CRLF/结束 flush、损坏事件跳过，以及工具函数名增量合并、调用 ID 归并和粘连工具名拆分。人工测试范围与准入标准见 [`docs/testing/test-cases.md`](docs/testing/test-cases.md)，缺陷记录可复用 [`docs/testing/bug-report-template.md`](docs/testing/bug-report-template.md)。
+当前自动化用例覆盖 SSE 分片与损坏事件、工具调用增量兼容、Agent Loop 停止条件、子 Agent 并行策略和异常参数降级。人工测试范围与准入标准见 [`docs/testing/test-cases.md`](docs/testing/test-cases.md)，真实回归案例见 [`docs/testing/real-defect-cases.md`](docs/testing/real-defect-cases.md)，缺陷记录可复用 [`docs/testing/bug-report-template.md`](docs/testing/bug-report-template.md)。
 
 ## 整体架构
 
