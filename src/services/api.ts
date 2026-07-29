@@ -1,4 +1,11 @@
 import { fetch as expoFetch } from 'expo/fetch';
+import {
+  consumeSseBuffer,
+  createEmptyToolCall,
+  expandConcatenatedToolNames,
+  mergeToolName,
+  resolveToolCallIndex,
+} from './sseParser';
 import { randomUUID } from 'expo-crypto';
 import { ToolDefinition } from './tools';
 import { insertApiUsageEvent } from '../db/operations';
@@ -99,98 +106,6 @@ interface RawApiUsage {
   [key: string]: unknown;
 }
 
-function createEmptyToolCall(): StreamToolCall {
-  return {
-    id: '',
-    type: 'function',
-    function: { name: '', arguments: '' },
-  };
-}
-
-function resolveToolCallIndex(
-  toolCallParts: StreamToolCall[],
-  partial: any,
-  position: number,
-  batchLength: number,
-  lastToolCallIndex: number
-): number {
-  const partialId = typeof partial.id === 'string' ? partial.id : '';
-  if (partialId) {
-    const existingById = toolCallParts.findIndex((tc) => tc?.id === partialId);
-    if (existingById >= 0) return existingById;
-  }
-
-  if (typeof partial.index === 'number') {
-    const existing = toolCallParts[partial.index];
-    if (!existing || !existing.id || !partialId || existing.id === partialId) {
-      return partial.index;
-    }
-    return toolCallParts.length;
-  }
-
-  if (batchLength > 1) {
-    const existing = toolCallParts[position];
-    if (!existing || !existing.id || !partialId || existing.id === partialId) {
-      return position;
-    }
-  }
-
-  return lastToolCallIndex >= 0 ? lastToolCallIndex : toolCallParts.length;
-}
-
-function mergeToolName(current: string, incoming: string): string {
-  if (!current) return incoming;
-  if (incoming === current) return current;
-  if (incoming.startsWith(current)) return incoming;
-  if (current.startsWith(incoming)) return current;
-  return current + incoming;
-}
-
-function splitKnownToolNames(name: string, knownToolNames: Set<string>): string[] {
-  if (knownToolNames.has(name)) return [name];
-
-  const namesByLength = [...knownToolNames].sort((a, b) => b.length - a.length);
-  const result: string[] = [];
-  let remaining = name;
-
-  while (remaining) {
-    const nextName = namesByLength.find((toolName) => remaining.startsWith(toolName));
-    if (!nextName) return [name];
-    result.push(nextName);
-    remaining = remaining.slice(nextName.length);
-  }
-
-  return result.length > 0 ? result : [name];
-}
-
-function expandConcatenatedToolNames(
-  toolCalls: StreamToolCall[],
-  knownToolNames: Set<string>
-): StreamToolCall[] {
-  const expanded: StreamToolCall[] = [];
-
-  toolCalls.forEach((tc, index) => {
-    const names = splitKnownToolNames(tc.function.name, knownToolNames);
-    if (names.length <= 1) {
-      expanded.push({ ...tc, id: tc.id || `call_${index}` });
-      return;
-    }
-
-    names.forEach((name, nameIndex) => {
-      expanded.push({
-        ...tc,
-        id: nameIndex === 0 ? tc.id || `call_${index}` : `${tc.id || `call_${index}`}_${nameIndex}`,
-        function: {
-          name,
-          arguments: nameIndex === names.length - 1 ? tc.function.arguments : '{}',
-        },
-      });
-    });
-  });
-
-  return expanded;
-}
-
 function numberOrUndefined(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
@@ -267,31 +182,6 @@ function statusForError(error: unknown): ApiUsageStatus {
     return 'aborted';
   }
   return 'error';
-}
-
-function consumeSseBuffer(
-  buffer: string,
-  flush: boolean,
-  onJson: (json: any) => void
-): string {
-  const lines = buffer.split(/\r?\n/);
-  const pending = flush ? '' : lines.pop() || '';
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || !trimmed.startsWith('data: ')) continue;
-
-    const data = trimmed.slice(6).trim();
-    if (!data || data === '[DONE]') continue;
-
-    try {
-      onJson(JSON.parse(data));
-    } catch {
-      // skip malformed JSON
-    }
-  }
-
-  return pending;
 }
 
 async function recordApiUsage({

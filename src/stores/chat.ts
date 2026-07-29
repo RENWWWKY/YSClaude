@@ -4,6 +4,11 @@ import { randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 import { Alert } from 'react-native';
 import { ChatMessage, streamChat, streamChatCompletion } from '../services/api';
+import {
+  isParallelSubAgentBatch,
+  parseToolArguments,
+  shouldStopToolLoop,
+} from '../services/agentLoopPolicy';
 import { deleteGeneratedImageFile, generateOpenAIImage } from '../services/imageGeneration';
 import { deleteMessageVoiceFile } from '../services/voiceFiles';
 import { notifyReplyReady } from '../services/notifications';
@@ -1900,7 +1905,7 @@ async function runToolLoop(
     const toolCalls = message.tool_calls;
 
     // 没有工具调用，或已达上限 → 当前内容已经通过 onToken 流式写入 UI
-    if (!toolCalls || toolCalls.length === 0 || toolCallCount >= maxToolCalls) {
+    if (shouldStopToolLoop(toolCalls, toolCallCount, maxToolCalls) || !toolCalls) {
       return { handled: true, totalTokens };
     }
 
@@ -1918,11 +1923,12 @@ async function runToolLoop(
 
     // 纯子 Agent派发批次彼此独立：同时执行，但严格按模型返回顺序回填 tool result。
     // 混合了其他工具的批次仍走下方串行路径，避免破坏潜在的读写依赖。
-    const isParallelSubAgentBatch =
-      toolCalls.length > 1 &&
-      toolCallCount + toolCalls.length <= maxToolCalls &&
-      toolCalls.every((tc) => tc.function.name === 'dispatch_subagent');
-    if (isParallelSubAgentBatch) {
+    const shouldRunParallelSubAgents = isParallelSubAgentBatch(
+      toolCalls,
+      toolCallCount,
+      maxToolCalls
+    );
+    if (shouldRunParallelSubAgents) {
       const batchOffset = streamedContent.length;
       for (const tc of toolCalls) {
         toolCallCount++;
@@ -1936,12 +1942,7 @@ async function runToolLoop(
         });
       }
       const results = await Promise.all(toolCalls.map(async (tc) => {
-        let args: Record<string, any> = {};
-        try {
-          args = JSON.parse(tc.function.arguments || '{}');
-        } catch {
-          args = {};
-        }
+        const args = parseToolArguments(tc.function.arguments);
         return executeTool(tc.function.name, args, {
           conversationId: options?.conversationId,
           messageId: options?.messageId,
@@ -1993,12 +1994,7 @@ async function runToolLoop(
         contentOffset: streamedContent.length,
         round: toolCallRound,
       });
-      let args: Record<string, any> = {};
-      try {
-        args = JSON.parse(tc.function.arguments || '{}');
-      } catch {
-        args = {};
-      }
+      const args = parseToolArguments(tc.function.arguments);
       if (tc.function.name === ASK_USER_TOOL_NAME) {
         onToolInvocation?.({
           callId: tc.id,

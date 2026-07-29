@@ -12,6 +12,18 @@ YSClaude 是一个 Android 优先的个人 AI Agent 工作台。它以对话为�
 - **实时通信**：LiveKit、WebRTC、STT / LLM / TTS 流水线
 - **Android 原生层**：Kotlin、React Native NativeModules、AIDL、AccessibilityService、InputMethodService、Shizuku
 
+## 质量保障
+
+项目使用 Vitest 验证可独立运行的协议与工具调用逻辑，并通过 GitHub Actions 在 push 和 pull request 时执行类型检查与单元测试。
+
+```bash
+npm run typecheck
+npm test
+npm run test:coverage
+```
+
+当前自动化用例覆盖 SSE 分片与损坏事件、工具调用增量兼容、Agent Loop 停止条件、子 Agent 并行策略和异常参数降级。人工测试范围与准入标准见 [`docs/testing/test-cases.md`](docs/testing/test-cases.md)，真实回归案例见 [`docs/testing/real-defect-cases.md`](docs/testing/real-defect-cases.md)，缺陷记录可复用 [`docs/testing/bug-report-template.md`](docs/testing/bug-report-template.md)。
+
 ## 整体架构
 
 ```mermaid
