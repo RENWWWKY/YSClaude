@@ -14,6 +14,18 @@ YSClaude 是一款 Android 端个人 AI Agent 应用，支持日常聊天、语�
 - [YSClaude LiveKit Brain](https://github.com/winter-bit-cry/ysclaude-livekit-brain)：LiveKit Agents 实时语音、视频和屏幕共享通话。
 - [NeteaseCloudMusicApiEnhanced](https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced)：导入网易云账号歌单。
 
+## 质量保障
+
+项目使用 Vitest 验证可独立运行的协议与工具调用逻辑，并通过 GitHub Actions 在 push 和 pull request 时执行类型检查与单元测试。
+
+```bash
+npm run typecheck
+npm test
+npm run test:coverage
+```
+
+当前自动化用例覆盖 SSE 分片与损坏事件、工具调用增量兼容、Agent Loop 停止条件、子 Agent 并行策略和异常参数降级。人工测试范围与准入标准见 [`docs/testing/test-cases.md`](docs/testing/test-cases.md)，真实回归案例见 [`docs/testing/real-defect-cases.md`](docs/testing/real-defect-cases.md)，缺陷记录可复用 [`docs/testing/bug-report-template.md`](docs/testing/bug-report-template.md)。
+
 ## 安装与打包
 
 项目包含 Android 原生工程，不能使用 Expo Go 运行。构建前请安装 [Node.js LTS](https://nodejs.org/)，然后在项目根目录执行：
